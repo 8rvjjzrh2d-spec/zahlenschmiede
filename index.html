@@ -308,6 +308,9 @@
   .question-box{ text-align: center; padding: 16px 6px 10px; }
   .equation{ font-family: 'Press Start 2P', monospace; font-size: 22px; color: var(--text); margin-bottom: 22px; line-height: 1.6; }
   .block-icon{ font-size: 26px; vertical-align: middle; margin-right: 8px; }
+  .vocab-direction{ display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:12px; }
+  .vocab-flag{ font-size: 40px; line-height:1; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.4)); }
+  .vocab-direction-arrow{ font-size: 20px; color: var(--text-dim); font-weight:800; }
 
   input.answer{ width: 140px; font-family: 'Press Start 2P', monospace; font-size: 20px; text-align: center; padding: 12px 6px; border: 3px solid var(--ink); outline: none; color: var(--ink); background: #d8d8d8; }
   input.answer.correct{ border-color: var(--success); background: var(--success-bg); color: #8de892; }
@@ -535,6 +538,11 @@
       <div class="practice-controls-col">
         <div class="stat-row"><span>Punkte <b id="vocab-score">0</b></span><span>Serie <b id="vocab-streak">0</b>🔥</span></div>
         <div class="question-box">
+          <div class="vocab-direction">
+            <span class="vocab-flag" id="vocab-flag-from">🇬🇧</span>
+            <span class="vocab-direction-arrow">→</span>
+            <span class="vocab-flag" id="vocab-flag-to">🇩🇪</span>
+          </div>
           <div class="pixel-label" id="vocab-prompt-lang">Englisch → Deutsch</div>
           <div class="equation" id="vocab-prompt-word">word</div>
           <input type="text" class="answer" id="vocab-answer-input" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -9414,6 +9422,8 @@ function nextVocabQuestion(){
   const direction = Math.random() < 0.5 ? 'en2de' : 'de2en';
   vocabSession.current = { word, direction };
   document.getElementById('vocab-prompt-lang').textContent = direction === 'en2de' ? 'Englisch → Deutsch' : 'Deutsch → Englisch';
+  document.getElementById('vocab-flag-from').textContent = direction === 'en2de' ? '🇬🇧' : '🇩🇪';
+  document.getElementById('vocab-flag-to').textContent = direction === 'en2de' ? '🇩🇪' : '🇬🇧';
   document.getElementById('vocab-prompt-word').textContent = direction === 'en2de' ? word.en : word.de[0];
   document.getElementById('vocab-score').textContent = vocabSession.score;
   document.getElementById('vocab-streak').textContent = vocabSession.streak;
