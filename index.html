@@ -129,11 +129,7 @@
   .avatar-stage.fullscreen-stage{ position: absolute; inset: 0; width: auto; height: auto; min-height: 0; border: none; margin: 0; }
   .viewer-fullscreen-overlay{ position: fixed; inset: 0; z-index: 1200; background: #1c1c1c; }
   .fs-popup-active{ position:fixed !important; inset:36px; z-index:1500; box-shadow:0 0 0 9999px rgba(0,0,0,0.62); overflow:auto; }
-  .fs-popup-close-btn{ position:fixed; top:44px; right:44px; z-index:1600; }
-  .viewer-toolbar{ position: absolute; bottom: 76px; left: 50%; transform: translateX(-50%); z-index: 5; display:flex; gap:6px; flex-wrap: wrap; justify-content: center; max-width: 92%; }
-  .viewer-toolbar button{ background: rgba(28,28,28,0.85); color:#fff; border:2px solid var(--ink); font-weight:800; font-size:11px; padding:8px 12px; }
-  .viewer-exit-btn{ position:absolute; top:12px; right:12px; z-index:5; background: rgba(28,28,28,0.85); color:#fff; border:2px solid var(--ink); font-weight:800; font-size:12px; padding:8px 12px; }
-  .viewer-preset-row{ position:absolute; top:12px; left:12px; z-index:5; display:flex; gap:6px; }
+  .fs-popup-close-btn{ position:fixed !important; top:12px; right:12px; z-index:1600; width:38px; height:38px; padding:0; background: rgba(28,28,28,0.85); color:#fff; border:2px solid var(--ink); font-size:16px; font-weight:900; display:flex; align-items:center; justify-content:center; }
   .fullscreen-toggle-btn{ position:absolute; z-index:4; background: rgba(28,28,28,0.7); color:#fff; border:2px solid var(--ink); font-size:16px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; }
   .figure{ position: relative; width: 100px; height: 160px; transform-style: preserve-3d; }
   .figure.spinning{ animation: spin 9s linear infinite; }
@@ -192,8 +188,12 @@
   .equip-drop-row{ display:flex; gap:8px; justify-content:center; margin:10px 0; flex-wrap:wrap; }
   .equip-drop-slot{ width:48px; height:48px; background:var(--slot); border:2px dashed #ffffff66; display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; }
   .equip-drop-slot.drag-over{ background:#ffd54a55; border-color:var(--gold); }
-  .explore-joystick{ position:absolute; left:16px; bottom:72px; width:90px; height:90px; border-radius:50%; background:rgba(0,0,0,0.35); border:2px solid rgba(255,255,255,0.5); touch-action:none; z-index:6; }
-  .explore-joystick-knob{ position:absolute; left:27px; top:27px; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.85); border:2px solid var(--ink); pointer-events:none; }
+  /* Nur auf Touch-Geräten sichtbar (siehe IS_TOUCH_DEVICE im Skript) - auf dem
+     Desktop steuert man mit WASD, da braucht es keinen Stick auf dem Bildschirm.
+     Position unten links = ergonomisch für den linken Daumen beim Halten eines
+     Tablets mit beiden Händen (analog zum Original-Minecraft-Stick). */
+  .explore-joystick{ position:absolute; left:16px; bottom:84px; width:110px; height:110px; border-radius:50%; background:rgba(0,0,0,0.4); border:3px solid var(--ink); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35); touch-action:none; z-index:6; }
+  .explore-joystick-knob{ position:absolute; left:31px; top:31px; width:48px; height:48px; border-radius:50%; background:rgba(235,235,235,0.92); border:3px solid var(--ink); pointer-events:none; }
   .explore-interact-prompt{ position:absolute; left:50%; bottom:120px; transform:translateX(-50%); background:rgba(20,20,20,0.85); color:#ffd54a; border:2px solid var(--gold); padding:8px 14px; font-weight:900; font-size:12px; cursor:pointer; z-index:5; }
   .intro-card{ max-width:480px; margin:10vh auto; text-align:center; }
   .intro-scene-icon{ font-size:56px; margin-bottom:14px; }
@@ -365,34 +365,11 @@
     </div>
   </div>
 
-  <div id="viewer-fullscreen-overlay" class="viewer-fullscreen-overlay hidden">
-    <div class="avatar-stage fullscreen-stage" id="stage-fullscreen">
-      <div class="drag-hint">🖐️ ziehen zum Drehen · zwei Finger zum Verschieben · Pinch zum Zoomen</div>
-    </div>
-    <button class="viewer-exit-btn" id="fs-exit-btn">✕ Schließen</button>
-    <div class="viewer-toolbar" id="fs-toolbar">
-      <button id="fs-preset-reset">↺ Zurücksetzen</button>
-      <button id="fs-preset-body">🧍 Ganzer Körper</button>
-      <button id="fs-preset-face">🙂 Gesicht</button>
-      <button id="fs-preset-gear">⚔️ Ausrüstung</button>
-      <button id="fs-preset-pets">🐾 Haustiere</button>
-    </div>
-    <div class="hub-nav-overlay" id="fs-nav-overlay">
-      <div class="nav-buttons">
-        <button class="nav-btn" id="fs-nav-mine"><span class="emoji">⛏️</span><span>Aufgaben</span></button>
-        <button class="nav-btn" id="fs-nav-craft"><span class="emoji">🔨</span><span>Werkstatt</span></button>
-        <button class="nav-btn" id="fs-nav-inventory"><span class="emoji">🎒</span><span>Inventar</span></button>
-        <button class="nav-btn" id="fs-nav-customize"><span class="emoji">🧑‍🎨</span><span>Aussehen</span></button>
-        <button class="nav-btn" id="fs-nav-pets"><span class="emoji">🐾</span><span>Haustiere</span></button>
-        <button class="nav-btn" id="fs-nav-journal"><span class="emoji">📖</span><span>Tagebuch</span></button>
-        <button class="nav-btn" id="fs-nav-vocab"><span class="emoji">🔤</span><span>Englisch</span></button>
-      </div>
-    </div>
-    <button class="ghost-btn fs-popup-close-btn hidden" id="fs-popup-close-btn">✕ Zurück zur Vollbildansicht</button>
-    <div class="hidden explore-joystick" id="explore-joystick-fs">
-      <div class="explore-joystick-knob" id="explore-joystick-knob-fs"></div>
-    </div>
-  </div>
+  <!-- Vollbild ist jetzt der permanente Standard-Modus (kein separater Vollbild-
+       Overlay mehr nötig) - siehe #hub-screen weiter unten, das jetzt direkt die
+       Vollbild-Positionierung trägt. Nur der Popup-Schließen-Button (X oben
+       rechts) bleibt als eigenständiges, immer verfügbares Element bestehen. -->
+  <button class="fs-popup-close-btn hidden" id="fs-popup-close-btn" title="Schließen">✕</button>
 
   <div id="item-viewer-modal" class="item-viewer-modal hidden">
     <div class="item-viewer-panel">
@@ -445,34 +422,37 @@
     <div class="storage-note" id="storage-note"></div>
   </div>
 
-  <div class="hidden" id="hub-screen">
-    <div class="topbar"><button class="ghost-btn" id="switch-account-hub">🔄 Konto wechseln</button></div>
-    <h1>⛏️ ZAHLENSCHMIEDE</h1>
-    <div class="card">
-      <div class="avatar-stage" id="stage-hub">
-        <div class="zoom-controls"><button class="zoom-btn" id="zoom-in-btn">+</button><button class="zoom-btn" id="zoom-out-btn">−</button></div>
-        <button class="fullscreen-toggle-btn" id="hub-fullscreen-btn" style="top:8px; left:8px;" title="Vollbild">⛶</button>
-        <button class="fullscreen-toggle-btn" id="hub-reset-btn" style="top:8px; left:50px; width:auto; padding:0 10px; font-size:11px;" title="Kamera zurücksetzen">↺ Reset</button>
-        <div class="drag-hint" id="hub-drag-hint">🖐️ ziehen zum Drehen · zwei Finger/Rechtsklick zum Verschieben · Pinch zum Zoomen</div>
-        <div class="hub-nav-overlay" id="hub-nav-overlay">
-          <div class="nav-buttons">
-            <button class="nav-btn" id="nav-mine"><span class="emoji">⛏️</span><span>Aufgaben</span></button>
-            <button class="nav-btn" id="nav-craft"><span class="emoji">🔨</span><span>Werkstatt</span></button>
-            <button class="nav-btn" id="nav-inventory"><span class="emoji">🎒</span><span>Inventar</span></button>
-            <button class="nav-btn" id="nav-customize"><span class="emoji">🧑‍🎨</span><span>Aussehen</span></button>
-            <button class="nav-btn" id="nav-pets"><span class="emoji">🐾</span><span>Haustiere</span></button>
-            <button class="nav-btn" id="nav-journal"><span class="emoji">📖</span><span>Tagebuch</span></button>
-            <button class="nav-btn" id="nav-vocab"><span class="emoji">🔤</span><span>Englisch</span></button>
-          </div>
-        </div>
-        <button class="hidden fullscreen-toggle-btn" id="explore-exit-btn" style="top:8px; right:8px; width:auto; padding:0 10px; font-size:11px;">✕ Verlassen</button>
-        <div class="hidden explore-interact-prompt" id="explore-interact-prompt"></div>
-        <div class="hidden explore-joystick" id="explore-joystick">
-          <div class="explore-joystick-knob" id="explore-joystick-knob"></div>
+  <!-- Der Hub IST jetzt die Vollbildansicht (kein Umschalten mehr nötig) - flache,
+       absolut positionierte Struktur statt der alten "Karte in normalem
+       Seitenfluss", damit der 3D-Charakter/die Welt den gesamten Bildschirm
+       einnimmt. Kamera: nur noch EIN Reset-Button + Ziehen/Pinch, keine
+       Zoom-+/- - Buttons mehr (die gab es vorher zusätzlich zur Geste, das war
+       doppelt). Alle Menüs (Aufgaben, Werkstatt, ...) öffnen sich als Popup
+       darüber (siehe openScreenAsFullscreenPopup), geschlossen über das
+       eigenständige X oben rechts (fs-popup-close-btn, siehe oben). -->
+  <div class="hidden viewer-fullscreen-overlay" id="hub-screen">
+    <div class="avatar-stage fullscreen-stage" id="stage-hub">
+      <button class="fullscreen-toggle-btn" id="hub-reset-btn" style="top:8px; left:8px; width:auto; padding:0 10px; font-size:11px;" title="Kamera zurücksetzen">↺ Reset</button>
+      <button class="fullscreen-toggle-btn" id="switch-account-hub" style="top:8px; right:8px; width:auto; padding:0 10px; font-size:11px;" title="Konto wechseln">🔄</button>
+      <div class="level-bar-row" id="level-bar-hub" style="position:absolute; top:52px; left:8px; z-index:4; width:150px; margin-bottom:0;"></div>
+      <div class="streak-row" id="streak-row-hub" style="position:absolute; top:96px; left:8px; z-index:4; font-size:10px; margin-bottom:0; text-align:left;">🔥 0 Tage in Folge</div>
+      <div class="hidden drag-hint" id="hub-drag-hint">🖐️ ziehen zum Drehen · zwei Finger/Rechtsklick zum Verschieben · Pinch zum Zoomen</div>
+      <div class="hub-nav-overlay" id="hub-nav-overlay">
+        <div class="nav-buttons">
+          <button class="nav-btn" id="nav-mine"><span class="emoji">⛏️</span><span>Aufgaben</span></button>
+          <button class="nav-btn" id="nav-craft"><span class="emoji">🔨</span><span>Werkstatt</span></button>
+          <button class="nav-btn" id="nav-inventory"><span class="emoji">🎒</span><span>Inventar</span></button>
+          <button class="nav-btn" id="nav-customize"><span class="emoji">🧑‍🎨</span><span>Aussehen</span></button>
+          <button class="nav-btn" id="nav-pets"><span class="emoji">🐾</span><span>Haustiere</span></button>
+          <button class="nav-btn" id="nav-journal"><span class="emoji">📖</span><span>Tagebuch</span></button>
+          <button class="nav-btn" id="nav-vocab"><span class="emoji">🔤</span><span>Englisch</span></button>
         </div>
       </div>
-      <div class="level-bar-row" id="level-bar-hub"></div>
-      <div class="streak-row" id="streak-row-hub">🔥 0 Tage in Folge</div>
+      <button class="hidden fullscreen-toggle-btn" id="explore-exit-btn" style="top:52px; right:8px; width:auto; padding:0 10px; font-size:11px;">✕ Verlassen</button>
+      <div class="hidden explore-interact-prompt" id="explore-interact-prompt"></div>
+      <div class="hidden explore-joystick" id="explore-joystick">
+        <div class="explore-joystick-knob" id="explore-joystick-knob"></div>
+      </div>
     </div>
   </div>
 
@@ -6793,8 +6773,6 @@ try{
   engineRenderer.domElement.addEventListener('pointerup', endGesturePointer);
   engineRenderer.domElement.addEventListener('pointercancel', endGesturePointer);
   engineRenderer.domElement.addEventListener('dblclick', () => { animateCameraTo(CAMERA_PRESETS.fullBody); });
-  document.getElementById('zoom-in-btn').addEventListener('click', () => { camDistance = Math.max(CAM_DIST_MIN, camDistance-0.8); updateEngineCamera(); });
-  document.getElementById('zoom-out-btn').addEventListener('click', () => { camDistance = Math.min(CAM_DIST_MAX, camDistance+0.8); updateEngineCamera(); });
   document.getElementById('inv-zoom-in-btn').addEventListener('click', () => { camDistance = Math.max(CAM_DIST_MIN, camDistance-0.8); updateEngineCamera(); });
   document.getElementById('inv-zoom-out-btn').addEventListener('click', () => { camDistance = Math.min(CAM_DIST_MAX, camDistance+0.8); updateEngineCamera(); });
   document.getElementById('cust-zoom-in-btn').addEventListener('click', () => { camDistance = Math.max(CAM_DIST_MIN, camDistance-0.8); updateEngineCamera(); });
@@ -7903,56 +7881,33 @@ function renderInventoryGrid(){
 let currentScreenId = 'account-screen';
 const SCREENS_WITHOUT_3D_STAGE = ['account-screen', 'table-select-screen', 'craft-screen', 'end-screen', 'journal-screen', 'reward-screen', 'intro-screen'];
 function showScreen(id){
-  // Falls ein Popup über der Vollbildansicht aktiv ist und der Bildschirm über
-  // seinen EIGENEN internen Zurück-Button verlassen wird (statt über den
-  // dedizierten Popup-Schließen-Button), räumen wir sauber auf: Popup-Klasse
-  // entfernen und auch die Vollbildansicht selbst verlassen.
+  // Falls ein Popup-Menü offen ist und über seinen EIGENEN internen Zurück-
+  // Button verlassen wird (statt über den dedizierten Popup-Schließen-Button),
+  // räumen wir sauber auf: Popup-Klasse entfernen. "hub-screen" selbst TRÄGT
+  // jetzt die Vollbild-Positionierung direkt (siehe CSS .viewer-fullscreen-
+  // overlay auf #hub-screen) - kein separates Overlay-Element mehr nötig.
   if(fsPopupScreenId && id !== fsPopupScreenId){
     document.getElementById(fsPopupScreenId).classList.remove('fs-popup-active');
     fsPopupScreenId = null;
     document.getElementById('fs-popup-close-btn').classList.add('hidden');
-    document.getElementById('viewer-fullscreen-overlay').classList.add('hidden');
   }
   currentScreenId = id;
   ['account-screen','hub-screen','table-select-screen','practice-screen','vocab-screen','craft-screen','inventory-screen','customize-screen','world-screen','pet-menu-screen','journal-screen','reward-screen','intro-screen','end-screen'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s !== id);
   });
 }
-document.getElementById('nav-mine').addEventListener('click', () => { renderTableGrid(); syncModeTabsUI(); showScreen('table-select-screen'); });
-document.getElementById('nav-craft').addEventListener('click', () => { renderCraftScreen(); showScreen('craft-screen'); });
-document.getElementById('nav-vocab').addEventListener('click', () => { showScreen('vocab-screen'); startVocabSession(); });
-document.getElementById('nav-inventory').addEventListener('click', () => { showScreen('inventory-screen'); renderInventoryScreen(); });
-document.getElementById('nav-customize').addEventListener('click', () => { showScreen('customize-screen'); renderCustomizeScreen(); });
+// Alle Menü-Knöpfe öffnen ihr Ziel als schwebendes Popup ÜBER der (jetzt
+// permanenten) Vollbildansicht statt sie zu ersetzen - siehe
+// openScreenAsFullscreenPopup weiter unten. Geschlossen wird über das
+// eigenständige X oben rechts (fs-popup-close-btn).
+document.getElementById('nav-mine').addEventListener('click', () => openScreenAsFullscreenPopup('table-select-screen', () => { renderTableGrid(); syncModeTabsUI(); }));
+document.getElementById('nav-craft').addEventListener('click', () => openScreenAsFullscreenPopup('craft-screen', renderCraftScreen));
+document.getElementById('nav-inventory').addEventListener('click', () => openScreenAsFullscreenPopup('inventory-screen', renderInventoryScreen));
+document.getElementById('nav-customize').addEventListener('click', () => openScreenAsFullscreenPopup('customize-screen', renderCustomizeScreen));
+document.getElementById('nav-pets').addEventListener('click', () => openScreenAsFullscreenPopup('pet-menu-screen', renderPetMenuScreen));
+document.getElementById('nav-journal').addEventListener('click', () => openScreenAsFullscreenPopup('journal-screen', renderJournalScreen));
+document.getElementById('nav-vocab').addEventListener('click', () => openScreenAsFullscreenPopup('vocab-screen', initVocabSession));
 // (nav-world entfernt - redundant mit Tagebuch, das dieselbe Welt-Auswahl bereits anzeigt)
-
-// -- Vollbild-Charakter-Betrachter: nutzt exakt dieselbe Szene/denselben Renderer, wird nur umgehängt
-let preFullscreenMount = null;
-document.getElementById('hub-fullscreen-btn').addEventListener('click', () => {
-  preFullscreenMount = 'stage-hub';
-  document.getElementById('viewer-fullscreen-overlay').classList.remove('hidden');
-  mountStage('stage-fullscreen', { drag:true, spin:false });
-  setTimeout(() => { const c = document.getElementById('stage-fullscreen'); if(c) sizeEngineToContainer(c); }, 60);
-  // Der Joystick lebt normalerweise nur im regulären Hub-Bildschirm - beim
-  // Wechsel ins Vollbild während des Erkundens braucht es den eigenständigen
-  // Vollbild-Joystick, sonst gäbe es dort keine Touch-Navigation.
-  if(exploreMode){
-    document.getElementById('explore-joystick').classList.add('hidden');
-    document.getElementById('explore-joystick-fs').classList.remove('hidden');
-  }
-});
-document.getElementById('fs-exit-btn').addEventListener('click', () => {
-  document.getElementById('viewer-fullscreen-overlay').classList.add('hidden');
-  mountStage(preFullscreenMount || 'stage-hub', { drag:true, spin:false });
-  if(exploreMode){
-    document.getElementById('explore-joystick-fs').classList.add('hidden');
-    document.getElementById('explore-joystick').classList.remove('hidden');
-  }
-});
-document.getElementById('fs-preset-reset').addEventListener('click', () => { animateCameraTo(CAMERA_PRESETS.fullBody); });
-document.getElementById('fs-preset-body').addEventListener('click', () => { animateCameraTo(CAMERA_PRESETS.fullBody); });
-document.getElementById('fs-preset-face').addEventListener('click', () => { animateCameraTo(CAMERA_PRESETS.face); });
-document.getElementById('fs-preset-gear').addEventListener('click', () => { animateCameraTo(CAMERA_PRESETS.gear); });
-document.getElementById('fs-preset-pets').addEventListener('click', () => { animateCameraTo(CAMERA_PRESETS.pets); });
 
 // Popup-Overlay-System für die Vollbildansicht: öffnet dieselben Bildschirme
 // wie das normale Menü, aber schwebend über der Vollbildansicht statt sie zu
@@ -7976,17 +7931,8 @@ function closeFullscreenPopup(){
   document.getElementById('fs-popup-close-btn').classList.add('hidden');
 }
 document.getElementById('fs-popup-close-btn').addEventListener('click', closeFullscreenPopup);
-document.getElementById('fs-nav-mine').addEventListener('click', () => openScreenAsFullscreenPopup('table-select-screen', () => { renderTableGrid(); syncModeTabsUI(); }));
-document.getElementById('fs-nav-craft').addEventListener('click', () => openScreenAsFullscreenPopup('craft-screen', renderCraftScreen));
-document.getElementById('fs-nav-inventory').addEventListener('click', () => openScreenAsFullscreenPopup('inventory-screen', renderInventoryScreen));
-document.getElementById('fs-nav-customize').addEventListener('click', () => openScreenAsFullscreenPopup('customize-screen', renderCustomizeScreen));
-document.getElementById('fs-nav-pets').addEventListener('click', () => openScreenAsFullscreenPopup('pet-menu-screen', renderPetMenuScreen));
-document.getElementById('fs-nav-journal').addEventListener('click', () => openScreenAsFullscreenPopup('journal-screen', renderJournalScreen));
-document.getElementById('fs-nav-vocab').addEventListener('click', () => openScreenAsFullscreenPopup('vocab-screen', initVocabSession));
 document.getElementById('hub-reset-btn').addEventListener('click', () => { animateCameraTo(CAMERA_PRESETS.fullBody); });
-document.getElementById('nav-pets').addEventListener('click', () => { showScreen('pet-menu-screen'); renderPetMenuScreen(); });
 document.getElementById('back-to-hub-from-pet-menu').addEventListener('click', () => { stopAllPetPreviews(); showScreen('hub-screen'); renderHub(); });
-document.getElementById('nav-journal').addEventListener('click', () => { showScreen('journal-screen'); renderJournalScreen(); });
 
 // =====================================================================
 // BEGEHBARER MODUS ("Erkunden") - Bewegung im bestehenden Dorf-Biom.
@@ -8178,13 +8124,16 @@ function setupJoystick(baseId, knobId){
   window.addEventListener('pointercancel', stop); // z.B. bei Browser-Gesten-Unterbrechung - sonst bliebe dragging haengen
 }
 setupJoystick('explore-joystick', 'explore-joystick-knob');
-setupJoystick('explore-joystick-fs', 'explore-joystick-knob-fs');
+// Auf dem Desktop steuert man mit WASD (siehe Tastatur-Listener) - der
+// Bildschirm-Stick braucht dort nur unnötig Platz und wird deshalb nur auf
+// echten Touch-Geräten (Tablet/Handy) überhaupt eingeblendet.
+const IS_TOUCH_DEVICE = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 function enterExploreMode(){
   exploreMode = true;
   lastExploreT = null;
   document.getElementById('hub-drag-hint').classList.add('hidden');
   document.getElementById('explore-exit-btn').classList.remove('hidden');
-  document.getElementById('explore-joystick').classList.remove('hidden');
+  if(IS_TOUCH_DEVICE) document.getElementById('explore-joystick').classList.remove('hidden');
 }
 function exitExploreMode(){
   exploreMode = false;
@@ -8205,7 +8154,6 @@ function exitExploreMode(){
   document.getElementById('hub-drag-hint').classList.remove('hidden');
   document.getElementById('explore-exit-btn').classList.add('hidden');
   document.getElementById('explore-joystick').classList.add('hidden');
-  document.getElementById('explore-joystick-fs').classList.add('hidden');
   document.getElementById('explore-interact-prompt').classList.add('hidden');
   updateEngineCamera();
 }
