@@ -62,6 +62,13 @@
   }
   .app{ width: 100%; max-width: 560px; }
   .practice-layout{ display:flex; flex-direction:column; }
+  /* Unter 900px (Tablet-Hochformat & Handy) kommt die Frage/Eingabe VOR dem
+     3D-Charakter bzw. der Runden-Übersicht - so bleibt das Wichtige oben
+     sichtbar, auch wenn eine Bildschirmtastatur von unten die halbe Seite
+     verdeckt (siehe auch body.keyboard-open weiter unten für Vokabeln). */
+  @media (max-width: 899px){
+    .practice-controls-col{ order: -1; }
+  }
   @media (min-width: 900px){
     #practice-screen{ width:880px; max-width:880px; position:relative; left:50%; transform:translateX(-50%); }
     .practice-layout{ flex-direction:row; align-items:flex-start; gap:24px; }
@@ -69,6 +76,16 @@
     .practice-controls-col{ flex:1 1 50%; min-width:0; display:flex; flex-direction:column; justify-content:center; }
     #practice-screen .avatar-stage{ height:min(50vh, 460px); }
   }
+  /* Aktiv, sobald JS eine geöffnete Bildschirmtastatur erkennt (siehe
+     VisualViewport-Listener weiter unten im Skript) - blendet die
+     Runden-Übersicht beim Vokabeltrainer komplett aus, damit Wort, Eingabe
+     und Feedback trotz Tastatur sichtbar bleiben. */
+  body.keyboard-open #vocab-screen .practice-viewer-col{ display:none; }
+  body.keyboard-open #vocab-screen .vocab-flag{ font-size: 26px; }
+  body.keyboard-open #vocab-screen .vocab-direction{ margin-bottom: 4px; }
+  body.keyboard-open #vocab-screen .question-box{ padding: 6px 6px 2px; }
+  body.keyboard-open #vocab-screen .equation{ margin-bottom: 10px; font-size: 18px; }
+  body.keyboard-open #vocab-screen .stat-row{ margin-bottom: 6px; }
   h1{ font-family: 'Press Start 2P', monospace; font-size: 17px; color: var(--text); text-align: center; margin: 4px 0 8px; text-shadow: 2px 2px 0 #000; }
   .subtitle{ text-align: center; color: var(--text-dim); font-size: 13px; margin-bottom: 18px; font-weight: 700; }
   .card{ background: var(--panel); border: 4px solid var(--ink); box-shadow: inset -4px -4px 0 var(--panel-dark), inset 4px 4px 0 var(--panel-light); padding: 18px 16px; margin-bottom: 16px; }
@@ -271,7 +288,13 @@
   .table-chip.selected{ box-shadow: 0 0 0 3px var(--gold) inset; }
 
   .quickrow{ display:flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
-  .quickbtn, .option-btn, .primary-btn, .ghost-btn, .check-btn, .danger-btn{ font-family: 'Nunito', sans-serif; cursor: pointer; border: 3px solid var(--ink); }
+  .quickbtn, .option-btn, .primary-btn, .ghost-btn, .check-btn, .danger-btn, .keypad-btn{ font-family: 'Nunito', sans-serif; cursor: pointer; border: 3px solid var(--ink); }
+  /* Eigenes Ziffern-Pad statt der nativen Bildschirmtastatur (siehe answer-input
+     inputmode="none") - die native Tastatur nimmt auf Tablets oft fast die
+     halbe Bildschirmhöhe ein und verdeckt Frage/Antwort/Feedback. */
+  .keypad{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 220px; margin: 12px auto 0; }
+  .keypad-btn{ background: var(--slot); color: var(--ink); font-weight: 800; font-size: 18px; padding: 12px 0; }
+  .keypad-btn:active{ background: var(--gold); }
   .quickbtn{ background: var(--panel-light); color: white; font-weight: 800; font-size: 12px; padding: 8px 12px; }
   .toggle-row{ display:flex; align-items:center; gap:8px; margin-bottom: 16px; font-size: 12px; font-weight: 700; }
   .toggle-row input{ width: 18px; height: 18px; }
@@ -515,7 +538,21 @@
         <div id="quest-progress-hint" style="margin-top:-2px; margin-bottom:8px;"></div>
         <div class="question-box">
           <div class="equation" id="equation"><span class="block-icon" id="mascot">🪨</span>7 × 6 = ?</div>
-          <input type="text" inputmode="numeric" class="answer" id="answer-input" autocomplete="off">
+          <input type="text" inputmode="none" class="answer" id="answer-input" autocomplete="off">
+          <div class="keypad" id="answer-keypad">
+            <button type="button" class="keypad-btn" data-digit="7">7</button>
+            <button type="button" class="keypad-btn" data-digit="8">8</button>
+            <button type="button" class="keypad-btn" data-digit="9">9</button>
+            <button type="button" class="keypad-btn" data-digit="4">4</button>
+            <button type="button" class="keypad-btn" data-digit="5">5</button>
+            <button type="button" class="keypad-btn" data-digit="6">6</button>
+            <button type="button" class="keypad-btn" data-digit="1">1</button>
+            <button type="button" class="keypad-btn" data-digit="2">2</button>
+            <button type="button" class="keypad-btn" data-digit="3">3</button>
+            <button type="button" class="keypad-btn" id="keypad-backspace">⌫</button>
+            <button type="button" class="keypad-btn" data-digit="0">0</button>
+            <button type="button" class="keypad-btn" id="keypad-clear">C</button>
+          </div>
           <div class="feedback" id="feedback"></div>
           <button class="check-btn" id="check-btn">ZERHAUEN ⛏️</button>
         </div>
@@ -9331,6 +9368,28 @@ document.addEventListener('keydown', (e) => {
   primaryAction();
 });
 
+// Eigenes Ziffern-Pad für answer-input (siehe inputmode="none" oben) - ersetzt
+// die native Bildschirmtastatur, die auf Tablets sehr viel Platz braucht.
+// Physische Tastatur (Desktop) funktioniert weiterhin ganz normal, inputmode
+// beeinflusst nur die virtuelle/Bildschirm-Tastatur, nicht echte Eingabegeräte.
+document.querySelectorAll('#answer-keypad .keypad-btn[data-digit]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById('answer-input');
+    if(input.disabled) return;
+    input.value += btn.dataset.digit;
+  });
+});
+document.getElementById('keypad-backspace').addEventListener('click', () => {
+  const input = document.getElementById('answer-input');
+  if(input.disabled) return;
+  input.value = input.value.slice(0, -1);
+});
+document.getElementById('keypad-clear').addEventListener('click', () => {
+  const input = document.getElementById('answer-input');
+  if(input.disabled) return;
+  input.value = '';
+});
+
 let abortConfirmTimer = null;
 document.getElementById('abort-btn').addEventListener('click', () => {
   const btn = document.getElementById('abort-btn');
@@ -10254,6 +10313,24 @@ const GameManager = {
   // TODO: zentraler Update-Takt (requestAnimationFrame-Hook), sobald Phase 2
   // (Bewegung) einen laufenden Spielzustand statt nur stehender Übungs-Szenen braucht.
 };
+
+// =====================================================================
+// TABLET-OPTIMIERUNG: Bildschirmtastatur-Erkennung
+// Beim Vokabeltrainer lässt sich eine echte Tastatur nicht vermeiden (freie
+// Texteingabe). Sobald sie sich öffnet, schrumpft visualViewport.height stark
+// gegenüber window.innerHeight (das bei sich öffnender virtueller Tastatur
+// unverändert bleibt) - genau das nutzen wir, um body.keyboard-open zu setzen
+// und dadurch Platz für Wort/Eingabe/Feedback freizuräumen (siehe CSS oben).
+// =====================================================================
+if(window.visualViewport){
+  const vv = window.visualViewport;
+  const updateKeyboardState = () => {
+    const shrunk = vv.height < window.innerHeight * 0.75;
+    document.body.classList.toggle('keyboard-open', shrunk);
+  };
+  vv.addEventListener('resize', updateKeyboardState);
+  vv.addEventListener('scroll', updateKeyboardState);
+}
 
 // =====================================================================
 // APP-START
