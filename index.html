@@ -3018,6 +3018,9 @@ function registerWorldObstacle(obj, options){
 }
 let smoothedCamDist = null;
 let cameraRaycaster = null;
+let occlusionEffectiveDist = null;
+let occlusionClearStreak = 0;
+let lastOcclusionSampleT = 0;
 function updateEngineCamera(){
   if(!engineReady) return;
   if(!itemViewerActive && !camTargetManuallySet){
@@ -3031,15 +3034,33 @@ function updateEngineCamera(){
   // Landmarke) zwischen Charakter und gewünschter Kamera-Position liegt,
   // und zieht die Kamera in diesem Fall näher heran, statt hindurchzuclippen
   // oder die Sicht zu blockieren.
+  //
+  // Bewusst NICHT jeden Frame (60x/Sekunde) neu gemessen: beim Erkunden dreht
+  // sich die Kamera laufend leicht mit, wodurch der Sichtstrahl an Kanten von
+  // Bäumen/Zäunen sonst ständig zwischen "frei" und "blockiert" hin- und
+  // herkippen würde ("Pulsieren"). Stattdessen höchstens alle 100ms neu
+  // messen, UND beim Freiwerden erst nach mehreren aufeinanderfolgenden
+  // freien Messungen wieder rauszoomen (asymmetrische Trägheit) - ein neues
+  // Hindernis wird weiterhin sofort übernommen, damit die Kamera nie in eine
+  // Wand clippt, nur das Zurück-Zoomen wird beruhigt.
   let effectiveDist = camDistance;
   if(exploreMode && cameraOccluders.length){
-    if(!cameraRaycaster) cameraRaycaster = new THREE.Raycaster();
-    cameraRaycaster.set(camTarget, new THREE.Vector3(dirX,dirY,dirZ).normalize());
-    cameraRaycaster.far = camDistance;
-    const hits = cameraRaycaster.intersectObjects(cameraOccluders, true);
-    if(hits.length && hits[0].distance < camDistance){
-      effectiveDist = Math.max(1.8, hits[0].distance - 0.4); // kleiner Puffer, nie zu nah
+    const now = performance.now();
+    if(occlusionEffectiveDist === null || now - lastOcclusionSampleT > 100){
+      lastOcclusionSampleT = now;
+      if(!cameraRaycaster) cameraRaycaster = new THREE.Raycaster();
+      cameraRaycaster.set(camTarget, new THREE.Vector3(dirX,dirY,dirZ).normalize());
+      cameraRaycaster.far = camDistance;
+      const hits = cameraRaycaster.intersectObjects(cameraOccluders, true);
+      if(hits.length && hits[0].distance < camDistance){
+        occlusionEffectiveDist = Math.max(1.8, hits[0].distance - 0.4); // kleiner Puffer, nie zu nah
+        occlusionClearStreak = 0;
+      } else {
+        occlusionClearStreak++;
+        if(occlusionClearStreak >= 3) occlusionEffectiveDist = camDistance;
+      }
     }
+    effectiveDist = occlusionEffectiveDist;
   }
   // Sanft zur Ziel-Distanz überblenden statt hart zu springen - verhindert
   // ruckartige Kamera-Sprünge, wenn der Raycast von Frame zu Frame ein
