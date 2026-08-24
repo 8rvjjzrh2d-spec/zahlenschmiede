@@ -448,7 +448,6 @@
           <button class="nav-btn" id="nav-vocab"><span class="emoji">🔤</span><span>Englisch</span></button>
         </div>
       </div>
-      <button class="hidden fullscreen-toggle-btn" id="explore-exit-btn" style="top:52px; right:8px; width:auto; padding:0 10px; font-size:11px;">✕ Verlassen</button>
       <div class="hidden explore-interact-prompt" id="explore-interact-prompt"></div>
       <div class="hidden explore-joystick" id="explore-joystick">
         <div class="explore-joystick-knob" id="explore-joystick-knob"></div>
@@ -8153,7 +8152,6 @@ function enterExploreMode(){
   exploreMode = true;
   lastExploreT = null;
   document.getElementById('hub-drag-hint').classList.add('hidden');
-  document.getElementById('explore-exit-btn').classList.remove('hidden');
   if(IS_TOUCH_DEVICE) document.getElementById('explore-joystick').classList.remove('hidden');
 }
 function exitExploreMode(){
@@ -8173,12 +8171,10 @@ function exitExploreMode(){
   camTarget.set(0, CAM_TARGET_BODY_Y, 0);
   document.getElementById('hub-nav-overlay').classList.remove('hidden');
   document.getElementById('hub-drag-hint').classList.remove('hidden');
-  document.getElementById('explore-exit-btn').classList.add('hidden');
   document.getElementById('explore-joystick').classList.add('hidden');
   document.getElementById('explore-interact-prompt').classList.add('hidden');
   updateEngineCamera();
 }
-document.getElementById('explore-exit-btn').addEventListener('click', exitExploreMode);
 // Prüft, ob der Spieler nahe genug am wilden (bereits entdeckten) Pet steht,
 // um eine Begegnung zu beginnen - nutzt dasselbe Prompt-Muster wie Landmarken.
 // Das bloße Annähern startet NICHTS; erst das Anklicken beginnt die Sitzung.
