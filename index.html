@@ -2904,7 +2904,11 @@ function updateCrystalPlazaVisual(){
     mat.userData.baseGlow = filled ? 0.7 : 0.15; // sanftes Grundglühen für die Proximity-Hervorhebung
   });
 }
-let camDistance = 17, camYaw = 0.5, camPitch = 0.26;
+// 10.5 statt vorher 17 (nah am Maximum 18) - derselbe Wert, den auch der
+// Kamera-Reset-Knopf (CAMERA_PRESETS.fullBody) schon verwendet. Bei 17 reichte
+// der Kamera-Kollisions-Suchstrahl so weit, dass er im recht kompakten Dorf
+// ständig irgendetwas traf, bevor man überhaupt manuell gezoomt hatte.
+let camDistance = 10.5, camYaw = 0.5, camPitch = 0.26;
 let camTargetManuallySet = false;
 let camTarget = null;
 const CAM_DIST_MIN = 3.5, CAM_DIST_MAX = 18;
@@ -3033,6 +3037,16 @@ function updateEngineCamera(){
   // Landmarke) zwischen Charakter und gewünschter Kamera-Position liegt,
   // und zieht die Kamera in diesem Fall näher heran, statt hindurchzuclippen
   // oder die Sicht zu blockieren.
+  //
+  // Nur ECHTE Häuser (Hütten, Haus der Dorfältesten, Schmiede) zählen als
+  // Kamera-Hindernis - kleinere Wahrzeichen (Brunnen, Marktstand, Karren,
+  // Statue, Garten, Kristall-Platz, Portal, Waldeingang) sind bewusst
+  // ausgenommen (cameraOccluder:false bei ihrer registerWorldObstacle()-
+  // Registrierung), genau wie Hügel und normale Bäume schon vorher. Bei ~14
+  // Landmarken auf recht engem Raum löste sonst schon die bloße Nähe zu einem
+  // niedrigen Deko-Objekt ständig ein Heranzoomen aus ("ich sehe nur noch den
+  // Rücken"). Diese kleineren Objekte bleiben natürlich weiterhin ganz normale
+  // Bewegungs-Hindernisse (worldObstacles) - nur die Kamera ignoriert sie.
   //
   // Bewusst NICHT jeden Frame (60x/Sekunde) neu gemessen: beim Erkunden dreht
   // sich die Kamera laufend leicht mit, wodurch der Sichtstrahl an Kanten von
@@ -5688,7 +5702,10 @@ try{
     crystalCore.position.set(0,2.3,0);
     portalGroup.add(crystalCore);
     villagePortalCrystalCore = crystalCore;
-    registerWorldObstacle(portalGroup);
+    // cameraOccluder:false - schlankes Torbogen-Wahrzeichen, kein Haus mit
+    // geschlossenen Wänden; siehe Sammel-Kommentar bei der Kamera-Kollisions-
+    // Logik weiter unten (updateEngineCamera) für die Gesamt-Begründung.
+    registerWorldObstacle(portalGroup, { cameraOccluder:false });
     wieseGroup.add(portalGroup);
   })();
 
@@ -5745,7 +5762,7 @@ try{
       g.add(socket);
       villageCrystalSockets.push(sMat);
     }
-    registerWorldObstacle(g);
+    registerWorldObstacle(g, { cameraOccluder:false }); // niedrige Plattform, kein Haus - siehe Kamera-Kollisions-Kommentar
     wieseGroup.add(g);
   })();
 
@@ -5758,7 +5775,7 @@ try{
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.9,1.0,0.55), stoneMat); torso.position.y=2.2; g.add(torso);
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), stoneMat); head.position.y=3.0; g.add(head);
     const armR = new THREE.Mesh(new THREE.BoxGeometry(0.25,0.9,0.25), stoneMat); armR.position.set(0.65,2.3,0); armR.rotation.z=-0.4; g.add(armR);
-    registerWorldObstacle(g);
+    registerWorldObstacle(g, { cameraOccluder:false }); // schlanke Einzelfigur, kein Haus - siehe Kamera-Kollisions-Kommentar
     wieseGroup.add(g);
   })();
 
@@ -5771,7 +5788,10 @@ try{
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.6,5.5,8), barkMat); trunk.position.set(x,2.75,0); g.add(trunk);
       const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.4,8,8), leafMat); leaves.position.set(x,5.6,0); g.add(leaves);
     });
-    registerWorldObstacle(g);
+    // cameraOccluder:false - besteht wie normale Bäume nur aus dünnen Stämmen +
+    // Kronen, keine geschlossene Wand (normale Bäume sind aus demselben Grund
+    // schon länger keine Kamera-Hindernisse, siehe makeTreeInto).
+    registerWorldObstacle(g, { cameraOccluder:false });
     wieseGroup.add(g);
   })();
 
@@ -5848,7 +5868,9 @@ try{
     const postR = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.4,6), woodMat); postR.position.set(0.7,1.3,0); g.add(postR);
     const roofBeam = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.08,0.3), woodMat); roofBeam.position.y=2.0; g.add(roofBeam);
     g.scale.setScalar(2.2);
-    registerWorldObstacle(g); // Fußabdruck jetzt automatisch aus der Bounding Box abgeleitet
+    // cameraOccluder:false - niedriger Brunnenring, kein Haus - siehe
+    // Kamera-Kollisions-Kommentar bei updateEngineCamera weiter unten.
+    registerWorldObstacle(g, { cameraOccluder:false }); // Fußabdruck jetzt automatisch aus der Bounding Box abgeleitet
     wieseGroup.add(g);
   })();
 
@@ -5862,7 +5884,7 @@ try{
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,1.1,6), woodMat); post.position.set(px,1.05,pz); g.add(post);
     });
     g.scale.setScalar(2.2);
-    registerWorldObstacle(g);
+    registerWorldObstacle(g, { cameraOccluder:false }); // offener Marktstand, kein Haus
     wieseGroup.add(g);
   })();
 
@@ -5872,7 +5894,7 @@ try{
     const bed = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,0.9), woodMat); bed.position.y=0.5; g.add(bed);
     const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.1,10), woodMat); wheel.rotation.x=Math.PI/2; wheel.position.set(-0.6,0.35,0.5); g.add(wheel);
     g.scale.setScalar(2.2);
-    registerWorldObstacle(g); // Fußabdruck jetzt automatisch aus der Bounding Box abgeleitet (berücksichtigt die Drehung korrekt)
+    registerWorldObstacle(g, { cameraOccluder:false }); // Fußabdruck jetzt automatisch aus der Bounding Box abgeleitet (berücksichtigt die Drehung korrekt); klein, kein Haus
     wieseGroup.add(g);
   })();
 
@@ -5896,7 +5918,7 @@ try{
       }
     }
     g.scale.setScalar(2.2);
-    registerWorldObstacle(g);
+    registerWorldObstacle(g, { cameraOccluder:false }); // knöchelhoher, umzäunter Beetstreifen, kein Haus
     wieseGroup.add(g);
   })();
 
