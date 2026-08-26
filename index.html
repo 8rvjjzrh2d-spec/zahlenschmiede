@@ -3052,7 +3052,10 @@ function updateEngineCamera(){
       cameraRaycaster.far = camDistance;
       const hits = cameraRaycaster.intersectObjects(cameraOccluders, true);
       if(hits.length && hits[0].distance < camDistance){
-        occlusionEffectiveDist = Math.max(1.8, hits[0].distance - 0.4); // kleiner Puffer, nie zu nah
+        // Nie näher heranzoomen als der normale manuelle Mindest-Zoom
+        // (CAM_DIST_MIN) - vorher 1.8, das war so nah, dass man oft nur noch
+        // den Rücken/Hinterkopf des Charakters füllend im Bild hatte.
+        occlusionEffectiveDist = Math.max(CAM_DIST_MIN, hits[0].distance - 0.4);
         occlusionClearStreak = 0;
       } else {
         occlusionClearStreak++;
@@ -5467,7 +5470,12 @@ try{
     // sind exakt kreisförmig (nur Y wird skaliert), der radius-Parameter ist
     // bereits die exakte Fußabdruck-Größe - genauer als eine quadratische
     // Bounding Box und unabhängig von Matrix-Update-Timing.
-    registerWorldObstacle(mesh, { footprint:{ type:'circle', radius } });
+    // cameraOccluder:false - Hügel sind sanftes Kulissen-Gelände, keine Wände;
+    // als Kamera-Hindernis behandelt lösten sie (davon gibt es ~50 auf der
+    // Karte) ständig ein Heranzoomen aus, sodass man oft nur noch den Rücken
+    // des Charakters sah. Für die Bewegungs-Kollision (worldObstacles) bleiben
+    // sie natürlich weiterhin ein echtes Hindernis - nur die Kamera ignoriert sie.
+    registerWorldObstacle(mesh, { footprint:{ type:'circle', radius }, cameraOccluder:false });
   }
   function makeMountain(parent,x,z,radius,height,bodyColor){
     const group = new THREE.Group();
