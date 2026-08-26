@@ -8399,7 +8399,8 @@ function resolveMovement(curX, curZ, desiredX, desiredZ, radius, entityType){
 }
 let walkPhase = 0;
 let characterIsMoving = false;
-let moveRefYaw = null; // Kamera-Bezugswinkel, eingefroren für die Dauer einer Bewegungsgeste (siehe updateExploreStep)
+let moveRefYaw = null; // Kamera-Bezugswinkel, eingefroren bis sich die Eingaberichtung spürbar ändert (siehe updateExploreStep)
+let moveRefInputAngle = null; // Eingaberichtung, bei der moveRefYaw zuletzt neu gegriffen wurde
 function updateExploreStep(t){
   if(lastExploreT === null) lastExploreT = t;
   const dt = Math.min(0.1, t - lastExploreT);
@@ -8415,8 +8416,8 @@ function updateExploreStep(t){
     // vorne, nicht die rohe Welt-Z-Achse. So bleibt die Kamera beim Steuern
     // ruhig hinter dem Charakter, statt bei Links/Rechts abrupt umzuspringen.
     //
-    // WICHTIG: nutzt bewusst moveRefYaw (beim START der Bewegung eingefroren),
-    // NICHT das live weiterlaufende camYaw. Grund: charRotY dreht sich zu
+    // WICHTIG: nutzt bewusst moveRefYaw (siehe unten), NICHT das live
+    // weiterlaufende camYaw. Grund: charRotY dreht sich zu
     // "camYaw+Eingaberichtung" UND camYaw dreht sich gleichzeitig zu
     // "charRotY+180°" - ein geschlossener Regelkreis, in dem beide Winkel sich
     // gegenseitig hinterherjagen. Bei reiner Vorwärtseingabe hebt sich das
@@ -8424,13 +8425,29 @@ function updateExploreStep(t){
     // diagonalen Eingabe nicht - dort schaukelte sich das zu einer
     // unkontrollierten Dauerdrehung auf (mehrere Umdrehungen/Sekunde, Charakter
     // kam praktisch nicht mehr vom Fleck, nur die Gehanimation lief weiter).
-    // Ein eingefrorener Bezugswinkel pro Bewegungsgeste durchbricht den Kreis:
-    // die Zielrichtung steht fest, sowohl charRotY als auch camYaw pendeln sich
-    // dann ganz normal (gedämpft) darauf ein, ohne sich gegenseitig zu jagen.
-    if(moveRefYaw === null) moveRefYaw = camYaw;
+    //
+    // moveRefYaw greift die aktuelle Kamera-Ausrichtung neu, sobald sich die
+    // EINGABERICHTUNG spürbar ändert (nicht erst wenn losgelassen wird) - das
+    // durchbricht den Regelkreis trotzdem (zwischen zwei Griffen bleibt die
+    // Zielrichtung fest, kein Selbst-Aufschaukeln möglich), erlaubt aber
+    // weiterhin, beim Laufen nachzusteuern (z.B. W+D loslassen zu nur noch W).
+    // Reines Einfrieren für die GESAMTE Bewegungsgeste (frühere Version dieses
+    // Fixes) verhinderte das Nachsteuern komplett: die Richtung sprang beim
+    // Loslassen der Zusatztaste sofort zurück zur allerersten Richtung.
+    const nx = mx/Math.max(mag,1), nz = mz/Math.max(mag,1);
+    const inputAngle = Math.atan2(nx, nz);
+    if(moveRefYaw === null || moveRefInputAngle === null){
+      moveRefYaw = camYaw; moveRefInputAngle = inputAngle;
+    } else {
+      let inputDiff = inputAngle - moveRefInputAngle;
+      while(inputDiff > Math.PI) inputDiff -= Math.PI*2;
+      while(inputDiff < -Math.PI) inputDiff += Math.PI*2;
+      if(Math.abs(inputDiff) > 0.3){ // ~17° - spürbare Richtungsänderung, kein Analog-Rauschen
+        moveRefYaw = camYaw; moveRefInputAngle = inputAngle;
+      }
+    }
     const forwardX = -Math.sin(moveRefYaw), forwardZ = -Math.cos(moveRefYaw);
     const rightX = Math.cos(moveRefYaw), rightZ = -Math.sin(moveRefYaw);
-    const nx = mx/Math.max(mag,1), nz = mz/Math.max(mag,1);
     const dx = forwardX*(-nz) + rightX*nx;
     const dz = forwardZ*(-nz) + rightZ*nx;
     const dmag = Math.hypot(dx,dz) || 1;
@@ -8479,7 +8496,7 @@ function updateExploreStep(t){
     while(camDiff < -Math.PI) camDiff += Math.PI*2;
     camYaw += camDiff * 0.035;
   } else {
-    moveRefYaw = null; // Bezugswinkel verwerfen - die nächste Bewegung greift sich die dann aktuelle Kamera-Ausrichtung frisch
+    moveRefYaw = null; moveRefInputAngle = null; // verwerfen - die nächste Bewegung greift sich die dann aktuelle Kamera-Ausrichtung frisch
   }
   characterRoot.rotation.y = charRotY;
   characterRoot.position.y = isMoving ? Math.abs(Math.sin(walkPhase*0.5))*0.04 : 0; // leichtes Auf/Ab beim Gehen
