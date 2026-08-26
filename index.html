@@ -5810,7 +5810,14 @@ try{
       const rubble = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.3,0.5), crateMat); rubble.position.set(0.9,0.15,1.0); rubble.rotation.y=0.5; g.add(rubble);
     }
     g.scale.setScalar(2.2); // Charakter ist ~4 Einheiten hoch - Gebäude waren zu klein dimensioniert
-    registerWorldObstacle(g); // Fußabdruck jetzt automatisch aus der Bounding Box abgeleitet
+    // Fußabdruck BEWUSST nur von den Wänden ableiten, nicht automatisch von
+    // der gesamten Bounding Box: das Kegeldach (Radius 2.1) ist breiter als
+    // die Wände (Halbbreite 1.3) und würde sonst einen Kollisionsbereich
+    // erzeugen, der fast doppelt so groß wie das Haus selbst ist (Bug: dadurch
+    // konnte ein verschobenes Haus sogar den Startpunkt (0,0) blockieren, der
+    // Charakter blieb an Ort und Stelle stehen). Wand-Maße: BoxGeometry(2.6,
+    // wallH,2.4), also Halbbreite 1.3 / Halbtiefe 1.2, mal Skalierung 2.2.
+    registerWorldObstacle(g, { footprint:{ type:'box', halfWidth: 1.3*2.2+0.3, halfDepth: 1.2*2.2+0.3, offsetX:0, offsetZ:0 } });
     wieseGroup.add(g);
     return g;
   }
