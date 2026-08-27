@@ -8399,8 +8399,6 @@ function resolveMovement(curX, curZ, desiredX, desiredZ, radius, entityType){
 }
 let walkPhase = 0;
 let characterIsMoving = false;
-let moveRefYaw = null; // Kamera-Bezugswinkel, eingefroren bis sich die Eingaberichtung spürbar ändert (siehe updateExploreStep)
-let moveRefInputAngle = null; // Eingaberichtung, bei der moveRefYaw zuletzt neu gegriffen wurde
 function updateExploreStep(t){
   if(lastExploreT === null) lastExploreT = t;
   const dt = Math.min(0.1, t - lastExploreT);
@@ -8413,41 +8411,18 @@ function updateExploreStep(t){
   characterIsMoving = isMoving;
   if(isMoving){
     // Kamera-relative Bewegung: "vorwärts" = von der Kamera aus gesehen nach
-    // vorne, nicht die rohe Welt-Z-Achse. So bleibt die Kamera beim Steuern
-    // ruhig hinter dem Charakter, statt bei Links/Rechts abrupt umzuspringen.
-    //
-    // WICHTIG: nutzt bewusst moveRefYaw (siehe unten), NICHT das live
-    // weiterlaufende camYaw. Grund: charRotY dreht sich zu
-    // "camYaw+Eingaberichtung" UND camYaw dreht sich gleichzeitig zu
-    // "charRotY+180°" - ein geschlossener Regelkreis, in dem beide Winkel sich
-    // gegenseitig hinterherjagen. Bei reiner Vorwärtseingabe hebt sich das
-    // zufällig exakt auf (deshalb lange unbemerkt), bei jeder seitlichen/
-    // diagonalen Eingabe nicht - dort schaukelte sich das zu einer
-    // unkontrollierten Dauerdrehung auf (mehrere Umdrehungen/Sekunde, Charakter
-    // kam praktisch nicht mehr vom Fleck, nur die Gehanimation lief weiter).
-    //
-    // moveRefYaw greift die aktuelle Kamera-Ausrichtung neu, sobald sich die
-    // EINGABERICHTUNG spürbar ändert (nicht erst wenn losgelassen wird) - das
-    // durchbricht den Regelkreis trotzdem (zwischen zwei Griffen bleibt die
-    // Zielrichtung fest, kein Selbst-Aufschaukeln möglich), erlaubt aber
-    // weiterhin, beim Laufen nachzusteuern (z.B. W+D loslassen zu nur noch W).
-    // Reines Einfrieren für die GESAMTE Bewegungsgeste (frühere Version dieses
-    // Fixes) verhinderte das Nachsteuern komplett: die Richtung sprang beim
-    // Loslassen der Zusatztaste sofort zurück zur allerersten Richtung.
+    // vorne. Nutzt bewusst das LIVE camYaw (nicht eingefroren) - Steuern durch
+    // Ziehen der Ansicht WÄHREND des Laufens soll sofort wirken (man läuft
+    // dahin, wohin man gerade schaut), das war das eigentlich gewünschte
+    // Verhalten. Die Kamera folgt dem Charakter deshalb NICHT mehr automatisch
+    // hinterher (siehe weiter unten) - camYaw wird ausschließlich durch
+    // Ziehen/Pinch verändert, nie durch Bewegung selbst. Dadurch entsteht kein
+    // Regelkreis mehr zwischen charRotY und camYaw (der frühere Auto-Verfolgen-
+    // Ansatz ließ beide sich gegenseitig hinterherjagen und schaukelte sich bei
+    // seitlicher/diagonaler Eingabe zu einer unkontrollierten Dauerdrehung auf).
     const nx = mx/Math.max(mag,1), nz = mz/Math.max(mag,1);
-    const inputAngle = Math.atan2(nx, nz);
-    if(moveRefYaw === null || moveRefInputAngle === null){
-      moveRefYaw = camYaw; moveRefInputAngle = inputAngle;
-    } else {
-      let inputDiff = inputAngle - moveRefInputAngle;
-      while(inputDiff > Math.PI) inputDiff -= Math.PI*2;
-      while(inputDiff < -Math.PI) inputDiff += Math.PI*2;
-      if(Math.abs(inputDiff) > 0.3){ // ~17° - spürbare Richtungsänderung, kein Analog-Rauschen
-        moveRefYaw = camYaw; moveRefInputAngle = inputAngle;
-      }
-    }
-    const forwardX = -Math.sin(moveRefYaw), forwardZ = -Math.cos(moveRefYaw);
-    const rightX = Math.cos(moveRefYaw), rightZ = -Math.sin(moveRefYaw);
+    const forwardX = -Math.sin(camYaw), forwardZ = -Math.cos(camYaw);
+    const rightX = Math.cos(camYaw), rightZ = -Math.sin(camYaw);
     const dx = forwardX*(-nz) + rightX*nx;
     const dz = forwardZ*(-nz) + rightZ*nx;
     const dmag = Math.hypot(dx,dz) || 1;
@@ -8486,17 +8461,8 @@ function updateExploreStep(t){
       charRotY += diff * 0.045; // spürbar langsamer/sanfter als vorher
     }
     walkPhase += dt * 8; // Schritt-Frequenz
-    // Verfolgungskamera: dreht sich beim Laufen sanft hinter den Charakter,
-    // damit man ihm wirklich "von hinten" beim Gehen zusieht, statt dass die
-    // Kamera nur an Ort und Stelle mitwandert. Freies Umsehen per Ziehen
-    // bleibt möglich, sobald man stehen bleibt.
-    const desiredCamYaw = charRotY + Math.PI;
-    let camDiff = desiredCamYaw - camYaw;
-    while(camDiff > Math.PI) camDiff -= Math.PI*2;
-    while(camDiff < -Math.PI) camDiff += Math.PI*2;
-    camYaw += camDiff * 0.035;
-  } else {
-    moveRefYaw = null; moveRefInputAngle = null; // verwerfen - die nächste Bewegung greift sich die dann aktuelle Kamera-Ausrichtung frisch
+    // Keine automatische Verfolgungskamera mehr - camYaw wird beim Laufen
+    // nicht mehr angerührt, nur Ziehen/Pinch verändern es (siehe oben).
   }
   characterRoot.rotation.y = charRotY;
   characterRoot.position.y = isMoving ? Math.abs(Math.sin(walkPhase*0.5))*0.04 : 0; // leichtes Auf/Ab beim Gehen
