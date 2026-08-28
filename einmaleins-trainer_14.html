@@ -3119,6 +3119,15 @@ function updateOccluderFades(){
 }
 function updateEngineCamera(){
   if(!engineReady) return;
+  // Schatten-Licht mit dem Charakter mitführen (siehe Kommentar bei der
+  // Erstellung des Lichts weiter oben) - sonst gibt es abseits vom
+  // Weltursprung keine Bodenkontakt-Schatten. Läuft bewusst hier (jeden
+  // Frame, unabhängig vom Bildschirm), damit es auch in der Werkstatt/
+  // Anpassung/Item-Ansicht korrekt bleibt, nicht nur beim Erkunden.
+  if(sunLight && characterRoot){
+    sunLight.position.set(characterRoot.position.x+3, characterRoot.position.y+6, characterRoot.position.z+4);
+    sunLight.target.position.set(characterRoot.position.x, characterRoot.position.y, characterRoot.position.z);
+  }
   if(!itemViewerActive && !camTargetManuallySet){
     const zoomT = Math.max(0, Math.min(1, 1 - (camDistance-CAM_DIST_MIN)/(CAM_DIST_MAX-CAM_DIST_MIN)));
     camTarget.y = CAM_TARGET_BODY_Y + (CAM_TARGET_FACE_Y - CAM_TARGET_BODY_Y) * zoomT;
@@ -5184,13 +5193,34 @@ function spawnCrystalSparkle(){
   engineScene.add(s);
   spawnEffect(1.6, (p) => { s.position.y += 0.012; mat.opacity = 0.8*(1-p); }, () => engineScene.remove(s));
 }
-function updateWorldAmbience(t){
+function updateWorldAmbience(t, dt){
   if(!engineReady) return;
   if(villageElderLantern) villageElderLantern.position.x = 0.9 + Math.sin(t*1.5)*0.05; // sanftes Schwingen
   if(blacksmithChimneyTop && t - lastSmokeSpawn > 2.2){ lastSmokeSpawn = t; spawnSmokePuff(blacksmithChimneyTop); }
   if(villageCrystalSockets.length && t - lastSparkleSpawn > 1.5){ lastSparkleSpawn = t; spawnCrystalSparkle(); }
   villagerFigures.forEach(v => {
-    v.group.position.y = Math.sin(t*1.2 + v.phase)*0.02; // leichtes Wiegen im Stand
+    // Patrouille: pendelt sanft entlang einer festen, kurzen Strecke um die
+    // Basis-Position (sin-Bewegung statt linearem Hin-und-Her, damit sie an
+    // den Enden natürlich abbremst/kurz "stehenbleibt" statt abrupt
+    // umzudrehen - siehe unten, das fällt praktischerweise mit dem
+    // ohnehin schon vorhandenen "gelegentliches Umschauen" zusammen).
+    v.patrolT += (dt||0.016) * 0.35;
+    const along = Math.sin(v.patrolT + v.phase) * v.patrolRange;
+    const speedSign = Math.cos(v.patrolT + v.phase); // Bewegungsrichtung entlang der Achse (Vorzeichen der Ableitung)
+    const px = v.baseX + Math.cos(v.patrolAngle)*along;
+    const pz = v.baseZ + Math.sin(v.patrolAngle)*along;
+    const moving = Math.abs(speedSign) > 0.08; // nahe der Umkehrpunkte kurz "stehenbleiben" statt zu zittern
+    v.group.position.x = px;
+    v.group.position.z = pz;
+    if(moving){
+      const dirX = Math.cos(v.patrolAngle)*Math.sign(speedSign), dirZ = Math.sin(v.patrolAngle)*Math.sign(speedSign);
+      v.group.rotation.y = Math.atan2(dirX, dirZ);
+    }
+    v.walkPhase += (dt||0.016) * (moving ? 6 : 0);
+    const swing = moving ? Math.sin(v.walkPhase)*0.5 : 0;
+    v.legPivotL.rotation.x = swing; v.legPivotR.rotation.x = -swing;
+    v.armPivotL.rotation.x = -swing*0.7; v.armPivotR.rotation.x = swing*0.7;
+    v.group.position.y = moving ? Math.abs(Math.sin(v.walkPhase*0.5))*0.015 : Math.sin(t*1.2 + v.phase)*0.02; // Geh-Wippen bzw. wie zuvor sanftes Wiegen im Stand
     v.head.rotation.y = Math.sin(t*0.4 + v.phase*2) > 0.5 ? Math.sin(t*0.4+v.phase*2)*0.6 : 0; // gelegentliches Umschauen
   });
   crystalSanctuaryButterflies.forEach(b => {
@@ -5357,7 +5387,7 @@ lastPetT = t;
 if(exploreMode) updatePetFollow(petDt);
 if(typeof updateWildPetIdle === 'function') updateWildPetIdle(petDt, exploreMode ? characterRoot.position.x : undefined, exploreMode ? characterRoot.position.z : undefined);
 // (Aufruf entfernt - siehe Phase-6-Bugfix-Hinweis bei der ehemaligen updateWildPetDiscovery)
-updateWorldAmbience(t);
+updateWorldAmbience(t, petDt);
 updateLumi(t, petDt);
 activePets.forEach((pet, pi) => {
     const ph = pet.phase || 0;
@@ -5499,20 +5529,33 @@ try{
 
   engineScene.fog = new THREE.Fog(0xdce8e0, 18, 70);
 
-  hemiLight = new THREE.HemisphereLight(0xffffff, 0x555555, 0.55);
+  // Etwas weniger Ambient-Fülllicht + etwas stärkere Sonne = mehr Kontrast
+  // zwischen Licht und Schatten statt der vorher recht flach/blass wirkenden
+  // Ausleuchtung (Nutzer-Feedback: "alles sehr hell, fast pastellfarbig").
+  hemiLight = new THREE.HemisphereLight(0xffffff, 0x555555, 0.42);
   engineScene.add(hemiLight);
-  sunLight = new THREE.DirectionalLight(0xfff3d6, 0.85);
+  sunLight = new THREE.DirectionalLight(0xfff3d6, 1.05);
   sunLight.position.set(3,6,4);
   sunLight.castShadow = true;
-  sunLight.shadow.mapSize.set(512,512);
-  sunLight.shadow.camera.left=-3; sunLight.shadow.camera.right=3;
-  sunLight.shadow.camera.top=5; sunLight.shadow.camera.bottom=-1;
-  sunLight.shadow.camera.near=1; sunLight.shadow.camera.far=12;
+  sunLight.shadow.mapSize.set(1024,1024);
+  // Schatten-Frustum bewusst klein UND eng um den Charakter zentriert (statt
+  // einer riesigen, unscharfen Fläche über die ganze Karte) - wird jeden
+  // Frame in updateEngineCamera() neu um die aktuelle Charakterposition
+  // zentriert (siehe dort). WICHTIG: vorher war dieses Frustum fest um den
+  // Weltursprung (0,0,0) zentriert und wurde NIE bewegt - dadurch gab es
+  // abseits des Startpunkts (also fast überall in den Dörfern/Biomen) gar
+  // keine Bodenkontakt-Schatten mehr. Das allein ließ die ganze Szene flach
+  // und leblos wirken, unabhängig von Farben/Texturen.
+  sunLight.shadow.camera.left=-4; sunLight.shadow.camera.right=4;
+  sunLight.shadow.camera.top=6; sunLight.shadow.camera.bottom=-1;
+  sunLight.shadow.camera.near=1; sunLight.shadow.camera.far=14;
+  sunLight.target.position.set(0,0,0);
+  engineScene.add(sunLight.target); // Ziel muss Teil des Szenegraphs sein, sonst wird seine matrixWorld nie aktualisiert
   engineScene.add(sunLight);
   rimLight = new THREE.DirectionalLight(0xbfe3ff, 0.28);
   rimLight.position.set(-5,3,-4);
   engineScene.add(rimLight);
-  engineRenderer.toneMappingExposure = 0.92;
+  engineRenderer.toneMappingExposure = 1.0;
 
   // Himmelskuppel (weicher Farbverlauf statt Flächenfarbe) - wird pro Welt neu eingefärbt/aus geblendet
   skyMesh = new THREE.Mesh(
@@ -5537,10 +5580,22 @@ try{
 
   // Boden - eine gemeinsame Fläche, deren Textur pro Welt getauscht wird
   function speckleTex(base, darkA, lightA, count){
-    return makeTex(64, (ctx,s) => {
+    return makeTex(128, (ctx,s) => {
       px(ctx,0,0,s,s,base);
       const r = rand(count+7);
-      for(let i=0;i<(count||160);i++) px(ctx, r()*s, r()*s, 2,2, r()>0.5?darkA:lightA);
+      // GRÖSSERE, weiche Flecken zuerst - sorgt für organische Unregelmäßigkeit
+      // (wirkt wie echte Vegetations-/Untergrund-Variation statt einer
+      // glatten Fläche). Vorher gab es nur die feine Sprenkelung weiter
+      // unten, die auf normaler Spieldistanz kaum auffiel - der Boden wirkte
+      // dadurch fast einfarbig ("wenig Details", siehe Nutzer-Feedback).
+      const blotchCount = Math.round((count||160) * 0.18);
+      for(let i=0;i<blotchCount;i++){
+        const bs = 8 + r()*20;
+        px(ctx, r()*s, r()*s, bs, bs, r()>0.5?darkA:lightA);
+      }
+      // Feine Sprenkelung obendrauf für Körnigkeit aus der Nähe (wie zuvor,
+      // nur entsprechend der jetzt doppelt so großen 128px-Leinwand skaliert).
+      for(let i=0;i<(count||160)*2;i++) px(ctx, r()*s, r()*s, 2,2, r()>0.5?darkA:lightA);
     });
   }
   const GROUND_TEXTURES = {
@@ -6018,33 +6073,53 @@ try{
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.07,0.8,6), woodMat); post.position.set(x, (zOff>0.5?0.3:0.4)*2.2, z+zOff); post.scale.setScalar(2.2); wieseGroup.add(post);
   });
 
-  // Einfache Dorfbewohner - keine vollen Charakter-Rigs, aber jetzt mit
-  // getrennten Beinen/Armen und einem einfachen Gesicht (zwei Augen) statt
-  // drei verschmolzener Blöcke ohne jedes Detail. Sanfte Idle-Bewegung bleibt
-  // wie zuvor (siehe villagerFigures/updateWorldAmbience).
+  // Einfache Dorfbewohner - keine vollen Charakter-Rigs, aber mit getrennten
+  // Beinen/Armen (jetzt über Pivot-Gruppen, damit sie beim Gehen echt
+  // schwingen können, wie beim Spieler-Charakter selbst), einem einfachen
+  // Gesicht UND Haaren (siehe hairMaterial() - dieselbe gestreifte Textur wie
+  // beim Spieler-Charakter, für denselben Stil). Bewegen sich jetzt aktiv:
+  // jede Figur pendelt langsam auf einer kurzen Strecke um ihren Startpunkt
+  // hin und her (siehe updateWorldAmbience) statt nur auf der Stelle zu
+  // wippen - bewusst KEIN echtes Pathfinding (die Figuren haben keine
+  // Kollision), der Radius bleibt klein genug, dass das in der Praxis nicht
+  // auffällt.
   villagerFigures = [];
-  function buildVillagerFigure(x,z,shirtColor,sizeScale){
+  function buildVillagerFigure(x,z,shirtColor,sizeScale,hairColor){
     const skinMat2 = flatMaterial('#e8b98a', 0.6);
     const shirtMat = new THREE.MeshStandardMaterial({ color:shirtColor, roughness:0.9 });
     const pantsMat = flatMaterial('#3a3a4a', 0.8);
     const eyeMat = flatMaterial('#2a1f16', 0.4);
+    const hMat = hairMaterial(hairColor || '#4a3222');
     const g = new THREE.Group(); g.position.set(x,0,z);
-    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.6,0.18), pantsMat); legL.position.set(-0.09,0.3,0); g.add(legL);
-    const legR = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.6,0.18), pantsMat); legR.position.set(0.09,0.3,0); g.add(legR);
+    const legPivotL = new THREE.Group(); legPivotL.position.set(-0.09,0.6,0); g.add(legPivotL);
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.6,0.18), pantsMat); legL.position.set(0,-0.3,0); legPivotL.add(legL);
+    const legPivotR = new THREE.Group(); legPivotR.position.set(0.09,0.6,0); g.add(legPivotR);
+    const legR = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.6,0.18), pantsMat); legR.position.set(0,-0.3,0); legPivotR.add(legR);
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.55,0.28), shirtMat); body.position.y=0.87; g.add(body);
-    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.5,0.16), shirtMat); armL.position.set(-0.275,0.85,0); g.add(armL);
-    const armR = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.5,0.16), shirtMat); armR.position.set(0.275,0.85,0); g.add(armR);
+    const armPivotL = new THREE.Group(); armPivotL.position.set(-0.275,1.10,0); g.add(armPivotL);
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.5,0.16), shirtMat); armL.position.set(0,-0.25,0); armPivotL.add(armL);
+    const armPivotR = new THREE.Group(); armPivotR.position.set(0.275,1.10,0); g.add(armPivotR);
+    const armR = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.5,0.16), shirtMat); armR.position.set(0,-0.25,0); armPivotR.add(armR);
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.32,0.32), skinMat2); head.position.y=1.3; g.add(head);
     const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.055,0.02), eyeMat); eyeL.position.set(-0.08,0.01,0.165); head.add(eyeL);
     const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.055,0.02), eyeMat); eyeR.position.set(0.08,0.01,0.165); head.add(eyeR);
+    const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.37,0.16,0.37), hMat); hairTop.position.set(0,0.235,0); head.add(hairTop);
+    const hairFront = new THREE.Mesh(new THREE.BoxGeometry(0.37,0.08,0.09), hMat); hairFront.position.set(0,0.115,0.135); head.add(hairFront);
+    [legL,legR,body,armL,armR,head,hairTop,hairFront].forEach(m => { m.castShadow = true; m.receiveShadow = true; });
     g.scale.setScalar(2.5 * (sizeScale||1)); // an Charaktergröße angleichen (Charakter ~4 Einheiten, vorher nur ~1.46)
     wieseGroup.add(g);
-    return { group:g, head, phase: Math.random()*10 };
+    return {
+      group:g, head, legPivotL, legPivotR, armPivotL, armPivotR, phase: Math.random()*10,
+      // Patrouille-Zustand: baseX/baseZ ist der Ankerpunkt, patrolAngle die
+      // feste Richtung der Hin-und-her-Strecke, patrolRange ihre Länge.
+      baseX:x, baseZ:z, patrolAngle: Math.random()*Math.PI*2, patrolRange: 1.0+Math.random()*0.6,
+      patrolT: Math.random()*10, walkPhase: Math.random()*10
+    };
   }
-  villagerFigures.push(buildVillagerFigure(11,-8,0x5a7ac9));   // Dorfälteste (nahe ihrem Haus)
-  villagerFigures.push(buildVillagerFigure(-13,5,0x2a2a2a));  // Schmied (nahe der Schmiede)
-  villagerFigures.push(buildVillagerFigure(-5,-8,0x6a9c4a));  // Bäuerin (nahe dem Garten)
-  villagerFigures.push(buildVillagerFigure(4,9,0xc97a4a,0.72)); // Kind (nahe dem Brunnen) - kleiner als die Erwachsenen
+  villagerFigures.push(buildVillagerFigure(11,-8,0x5a7ac9,1,'#e0d8c8'));   // Dorfälteste (nahe ihrem Haus) - graues Haar
+  villagerFigures.push(buildVillagerFigure(-13,5,0x2a2a2a,1,'#2a231c'));  // Schmied (nahe der Schmiede) - dunkles Haar
+  villagerFigures.push(buildVillagerFigure(-5,-8,0x6a9c4a,1,'#8a5a2a'));  // Bäuerin (nahe dem Garten) - braunes Haar
+  villagerFigures.push(buildVillagerFigure(4,9,0xc97a4a,0.72,'#e0b84a')); // Kind (nahe dem Brunnen) - kleiner, blondes Haar
 
   // Wasserfall-Silhouette am Horizont (deutet an, dass die Welt weitergeht)
   (function(){
