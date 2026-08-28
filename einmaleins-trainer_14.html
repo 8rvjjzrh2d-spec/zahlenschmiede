@@ -2926,7 +2926,12 @@ const CAM_DIST_MIN = 3.5, CAM_DIST_MAX = 18;
 // nur beim Erstellen der Lichter geändert, aber applyEnvironment() setzte bei
 // jedem Login/Biomwechsel eigene fest einprogrammierte Werte, die die
 // Änderung sofort wieder überschrieben - der Effekt kam beim Spielen nie an.
-const OVERWORLD_HEMI_INTENSITY = 0.42, OVERWORLD_SUN_INTENSITY = 1.05;
+// Etwas höher als die erste Kontrast-Anpassung (0.42) - die reine Kontrast-
+// Erhöhung machte die von der Sonne abgewandte Gebäudeseite (siehe rimLight
+// unten) zu dunkel/flach, ohne die sonnenzugewandte Seite spürbar zu
+// verbessern. 0.48 ist ein Mittelweg zwischen "zu flach" (0.55, Original)
+// und "Schattenseite zu dunkel" (0.42).
+const OVERWORLD_HEMI_INTENSITY = 0.48, OVERWORLD_SUN_INTENSITY = 1.05;
 // Nebel-Start/Ende: EXPLORE_RADIUS ist 40 - ein Nebel-Start von 18 (alter
 // Wert) ließ fast die gesamte äußere Hälfte des begehbaren Bereichs bereits
 // spürbar Richtung Nebelfarbe verblassen, wodurch entfernte Gebäude/Hügel
@@ -3469,6 +3474,29 @@ function hairMaterial(color){
     px(ctx,0,s-3,s,3,'#00000040');
   });
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.85 });
+  matCache[key] = mat;
+  return mat;
+}
+// Wand-Material mit sichtbarer Planken-/Fugen-Struktur statt einer reinen
+// Flächenfarbe - wichtig, weil Gebäude nur EINE feste Sonnenrichtung haben
+// (kein Tag/Nacht-Zyklus): je nach Ausrichtung ist eine Wandseite dauerhaft
+// unbeleuchtet (nur Ambient/Fülllicht), rein farblich also fast zwangsläufig
+// flach. Eine echte Oberflächenstruktur bleibt aber auch auf der "dunklen"
+// Seite sichtbar/interessant, unabhängig vom Lichtwinkel - das war der
+// eigentliche Kern des "wenig Details"-Feedbacks, nicht nur die Helligkeit.
+function plankWallMaterial(color, roughness){
+  const key = 'plank_'+color;
+  if(matCache[key]) return matCache[key];
+  const tex = makeTex(32, (ctx,s) => {
+    px(ctx,0,0,s,s,color);
+    const plankH = 5;
+    for(let y=0;y<s;y+=plankH) px(ctx,0,y,s,1,'#00000030');
+    const r = rand(31);
+    for(let i=0;i<60;i++) px(ctx, r()*s, r()*s, 1, 2, r()>0.5?'#00000018':'#ffffff18');
+  });
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2.5, 1.6); // ein paar Wiederholungen über die Wandfläche, kein einzelnes gestrecktes Muster
+  const mat = new THREE.MeshStandardMaterial({ map:tex, roughness: roughness===undefined?0.9:roughness });
   matCache[key] = mat;
   return mat;
 }
@@ -5574,7 +5602,16 @@ try{
   sunLight.target.position.set(0,0,0);
   engineScene.add(sunLight.target); // Ziel muss Teil des Szenegraphs sein, sonst wird seine matrixWorld nie aktualisiert
   engineScene.add(sunLight);
-  rimLight = new THREE.DirectionalLight(0xbfe3ff, 0.28);
+  // Ohne Tag/Nacht-Zyklus hat sunLight eine EINZIGE feste Richtung - jede
+  // Gebäudeseite, die dieser Richtung nicht zugewandt ist, bekommt nie
+  // direktes Licht, nur Ambient. rimLight sollte das ausgleichen, war mit
+  // 0.28 und einem kühlen Blauton aber viel zu schwach/kalt, um wirklich
+  // etwas beizutragen - genau die "andere" Gebäudeseite (z.B. die Rückwand
+  // einer Hütte) wirkte dadurch flach/blass, unabhängig von Sonne/Ambient/
+  // Nebel-Anpassungen (bestätigt durch direkten Vergleichsrender derselben
+  // Wand). Deutlich stärker und warm eingefärbt statt kühl - wirkt jetzt wie
+  // vom Himmel reflektiertes Streulicht statt wie ein kalter Kunstlicht-Fill.
+  rimLight = new THREE.DirectionalLight(0xffe8c0, 0.9);
   rimLight.position.set(-5,3,-4);
   engineScene.add(rimLight);
   engineRenderer.toneMappingExposure = 1.0;
@@ -5878,7 +5915,7 @@ try{
 
   // Haus der Dorfältesten - Hütte mit Satteldach, Tür und schwingender Laterne
   (function(){
-    const wallMat = new THREE.MeshStandardMaterial({ color:0xd9c9a3, roughness:0.9 });
+    const wallMat = plankWallMaterial('#d9c9a3', 0.9);
     const roofMat = new THREE.MeshStandardMaterial({ color:0x8a4a3a, roughness:0.85 });
     const doorMat = flatMaterial('#5a3a22', 0.8);
     const g = new THREE.Group(); g.position.set(15,0,-12);
@@ -5894,7 +5931,7 @@ try{
 
   // Schmiede - Werkstatt mit Amboss, Esse und rauchendem Schornstein
   (function(){
-    const wallMat = new THREE.MeshStandardMaterial({ color:0x7a7268, roughness:0.95 });
+    const wallMat = plankWallMaterial('#7a7268', 0.95);
     const roofMat = new THREE.MeshStandardMaterial({ color:0x3a3a3a, roughness:0.9 });
     const g = new THREE.Group(); g.position.set(-18,0,9);
     const walls = new THREE.Mesh(new THREE.BoxGeometry(3.4,1.8,2.8), wallMat); walls.position.y=0.9; g.add(walls);
@@ -5970,7 +6007,7 @@ try{
   // besiedeltes - wenn auch verlassenes - Dorf). Wiederverwendet dieselben
   // einfachen Baustein-Muster wie die 6 Landmarken oben, keine neue Systematik.
   // =====================================================================
-  const cottageWallMat = new THREE.MeshStandardMaterial({ color:0xc9b98a, roughness:0.9 });
+  const cottageWallMat = plankWallMaterial('#c9b98a', 0.9);
   const cottageRoofMat = new THREE.MeshStandardMaterial({ color:0x7a5a42, roughness:0.85 });
   const cottageDoorMat = flatMaterial('#5a3a22', 0.8);
   const cottageWindowMat = new THREE.MeshStandardMaterial({ color:0xbfe0e8, roughness:0.3, transparent:true, opacity:0.85, emissive:0x2a4a52, emissiveIntensity:0.15 });
