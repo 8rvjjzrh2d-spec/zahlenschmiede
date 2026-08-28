@@ -1727,12 +1727,9 @@ function renderPetPreview3D(containerId, petId){
     // Sichtfeld bewusst großzügig - die tatsächliche Kamera-Position wird
     // gleich unten dynamisch aus der Begrenzungsbox des Modells berechnet.
     const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 30);
-    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-    activePetPreviewRenderers.push(renderer);
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, preserveDrawingBuffer:true });
     renderer.setSize(size, size);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
 
     // Gleiche Beleuchtungswerte wie die Haupt-Ausrüstungs-Bühne (siehe
     // engineScene-Aufbau) - damit die Pets in derselben Anmutung erscheinen.
@@ -1744,7 +1741,7 @@ function renderPetPreview3D(containerId, petId){
 
     const pet = builder();
     pet.group.position.set(0,0,0);
-    pet.group.rotation.y = 0.4; // Ausgangswinkel VOR der Vermessung setzen, unten wird nicht mehr verändert
+    pet.group.rotation.y = 0.5; // leicht gedreht statt frontal, damit mehr als nur die Silhouette erkennbar ist
     scene.add(pet.group);
 
     // Kamera-Abstand aus der TATSÄCHLICHEN Begrenzungsbox berechnen statt
@@ -1761,32 +1758,30 @@ function renderPetPreview3D(containerId, petId){
     camera.position.set(boxCenter.x, boxCenter.y + boxSize.y*0.15, boxCenter.z + distance);
     camera.lookAt(boxCenter.x, boxCenter.y, boxCenter.z);
 
-    // Gleiche "Ziehen zum Drehen"-Interaktion wie die Ausrüstungs-Bühne,
-    // statt nur automatisch zu rotieren - dreht sich sanft von selbst, bis
-    // der Spieler aktiv zieht.
-    let angle = 0.4, autoRotate = true, dragging = false, lastX = 0;
-    renderer.domElement.style.cursor = 'grab';
-    renderer.domElement.addEventListener('pointerdown', (e) => {
-      dragging = true; autoRotate = false; lastX = e.clientX;
-      renderer.domElement.style.cursor = 'grabbing';
-      try { renderer.domElement.setPointerCapture(e.pointerId); } catch(err){}
-    });
-    renderer.domElement.addEventListener('pointermove', (e) => {
-      if(!dragging) return;
-      angle += (e.clientX - lastX) * 0.012;
-      lastX = e.clientX;
-    });
-    renderer.domElement.addEventListener('pointerup', () => { dragging = false; renderer.domElement.style.cursor = 'grab'; });
-    renderer.domElement.addEventListener('pointercancel', () => { dragging = false; renderer.domElement.style.cursor = 'grab'; });
-
-    function animatePreview(){
-      if(autoRotate) angle += 0.008; // sanfte automatische Drehung, bis der Spieler zieht
-      pet.group.rotation.y = angle;
-      renderer.render(scene, camera);
-      const frameId = requestAnimationFrame(animatePreview);
-      activePetPreviewFrames.push(frameId);
-    }
-    animatePreview();
+    // EIN Frame rendern und als statisches Bild einfrieren, statt dauerhaft
+    // einen eigenen WebGL-Kontext mit laufender Ziehen/Auto-Dreh-Animation
+    // offen zu halten. Grund (das war der eigentliche "Vorschaufenster
+    // funktionieren nicht mehr"-Bug, real reproduziert): jede Karte in
+    // dieser Liste bekam bisher ihren EIGENEN dauerhaften WebGLRenderer -
+    // bei mehr als ~6-8 gleichzeitig gezähmten Begleitern (Browser erlauben
+    // typischerweise nur 8-16 gleichzeitige WebGL-Kontexte insgesamt, siehe
+    // stopAllPetPreviews()-Kommentar) reichte das Kontext-Limit nicht mehr,
+    // und neue/bestehende Vorschauen rendern dann sichtbar kaputt/leer statt
+    // einen Fehler zu werfen. Diese kleinen Listen-Vorschauen brauchen keine
+    // Live-Rotation - zum genaueren, interaktiven Ansehen gibt es bereits
+    // die Lupe (openPetViewer). Ein einzelnes Standbild pro Karte + sofortige
+    // Freigabe des Kontexts danach behebt das Problem strukturell, nicht nur
+    // für den aktuellen Bestand an Begleitern.
+    renderer.render(scene, camera);
+    const dataUrl = renderer.domElement.toDataURL('image/png');
+    container.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = petId;
+    img.style.width = '100%'; img.style.height = '100%'; img.style.display = 'block';
+    container.appendChild(img);
+    renderer.dispose();
+    try { renderer.forceContextLoss(); } catch(err){}
   } catch(err){
     // Absicherung: falls das Bauen/Rendern doch fehlschlägt, lieber das
     // Emoji zeigen als eine leere Box.
@@ -3210,10 +3205,20 @@ function updateDayNightCycle(t){
     hemiLight.color.copy(__dnNightHemiSky).lerp(__dnDayHemiSky, dayT);
   }
   if(rimLight) rimLight.intensity = RIM_BASE_INTENSITY * (0.35 + 0.65*dayT); // nachts schwächer, aber nie ganz aus - sonst wäre die sonnenabgewandte UND die Nachtseite gleichzeitig komplett dunkel
-  if(skyMesh) skyMesh.material.color.copy(__dnNightSky).lerp(__dnDaySky, dayT);
-  if(sunDisc){
-    sunDisc.visible = sunHeight > -0.08;
-    if(sunDisc.material) sunDisc.material.opacity = 0.95 * Math.max(0, sunHeight);
+  // skyMesh/sunDisc bewusst NUR außerhalb des Item-/Haustier-Betrachters
+  // anfassen - der blendet beides (und den Boden/Charakter) bewusst aus und
+  // setzt stattdessen einen einfarbigen dunklen Hintergrund (siehe
+  // openPetViewer/openItemViewer). Ohne diese Sperre setzte diese Funktion
+  // sunDisc.visible hier jeden Frame wieder auf true zurück (echter Bug,
+  // gefunden beim "Vorschaufenster kaputt"-Report) - eine helle Sonnen-
+  // scheibe erschien dadurch mitten im eigentlich schlichten dunklen
+  // Betrachter-Hintergrund.
+  if(!itemViewerActive){
+    if(skyMesh) skyMesh.material.color.copy(__dnNightSky).lerp(__dnDaySky, dayT);
+    if(sunDisc){
+      sunDisc.visible = sunHeight > -0.08;
+      if(sunDisc.material) sunDisc.material.opacity = 0.95 * Math.max(0, sunHeight);
+    }
   }
   if(engineScene && engineScene.fog && engineScene.fog.__dayBaseColor){
     engineScene.fog.color.copy(engineScene.fog.__dayBaseColor).lerp(__dnNightFog, 1-dayT);
