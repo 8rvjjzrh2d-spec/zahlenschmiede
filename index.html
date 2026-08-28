@@ -2919,14 +2919,6 @@ let camDistance = 10.5, camYaw = 0.5, camPitch = 0.26;
 let camTargetManuallySet = false;
 let camTarget = null;
 const CAM_DIST_MIN = 3.5, CAM_DIST_MAX = 18;
-// Mindestabstand rein zum Schutz vor der Charakter-EIGENEN Geometrie (Haare,
-// Kopf, Schultern) beim Wand-Ausweichen - unabhängig von CAM_DIST_MIN, das
-// die normale MANUELLE Zoom-Grenze ist. Empirisch per Raycast gegen das
-// eigene Charaktermesh von camTarget aus in mehreren typischen Blickwinkeln
-// gemessen (0.35-0.64 Einheiten je nach Winkel) - 1.0 lässt überall sicher
-// Spielraum, ohne wieder in Richtung des alten 3.5-Bodens zu gehen (der bei
-// nahen Wänden durch sie hindurchclippen ließ, siehe unten).
-const CAM_SELF_CLIP_MIN = 1.0;
 const CAM_TARGET_BODY_Y = 3.4;   // Rahmung bei normalem Zoom - etwas über Kopfhöhe, Charakter + Haustiere + Kopfraum komplett sichtbar
 const CAM_TARGET_FACE_Y = 3.4;   // Rahmung beim Hineinzoomen (Gesicht bleibt zentriert)
 
@@ -3031,14 +3023,100 @@ function registerWorldObstacle(obj, options){
     obj.__colliderFootprint = opts.footprint || deriveAutomaticFootprint(obj, padding);
     worldObstacles.push(obj);
   }
-  if(opts.cameraOccluder !== false) cameraOccluders.push(obj);
+  if(opts.cameraOccluder !== false){
+    // Markierung als "das ist die Wurzel eines Kamera-Hindernisses" - damit
+    // ein per Raycast getroffenes einzelnes Mesh (z.B. nur die Dach-Geometrie)
+    // wieder zu SEINEM registrierten Objekt zurückgefunden werden kann (siehe
+    // getOccluderRoot() beim Ausblenden verdeckender Objekte in
+    // updateEngineCamera()).
+    obj.__isCameraOccluderRoot = true;
+    cameraOccluders.push(obj);
+  }
   return obj;
 }
-let smoothedCamDist = null;
 let cameraRaycaster = null;
-let occlusionEffectiveDist = null;
-let occlusionClearStreak = 0;
 let lastOcclusionSampleT = 0;
+// GRUNDLEGEND NEUER ANSATZ (2026-08-28) für Kamera-Verdeckung, ersetzt das
+// frühere "Kamera näher heranziehen"-System vollständig. Grund: JEDE Distanz-
+// basierte Lösung geriet zwangsläufig in Konflikt mit der Charaktergröße
+// (~4 Einheiten hoch) - ein Mindestabstand, der nah genug an eine Wand
+// heranlässt, ist automatisch auch nah genug, um stattdessen im eigenen
+// Charaktermesh (Haare/Kopf) zu clippen bzw. den Bildschirm mit dem eigenen
+// Körper zu füllen (mehrfach real reproduziert und gemessen: Boden 0.6 clippt
+// ins Haar, Boden 3.5 clippt durch nahe Wände). Es gibt schlicht keinen
+// Distanzwert, der beides gleichzeitig löst, wenn der Charakter dicht an
+// etwas Hohem/Breitem steht - und das kommt bei ~14 Landmarken auf engem Raum
+// häufig vor.
+// Stattdessen bleibt die Kamera IMMER auf der normalen, komfortablen
+// camDistance (wie ein manueller Zoom das erwarten würde) - Objekte, die
+// dabei zwischen Charakter und Kamera geraten, werden stattdessen
+// durchsichtig geschaltet (bekannte Technik, z.B. aus Zelda: BOTW), sodass
+// der Charakter weiterhin sichtbar bleibt, ohne dass die Kamera überhaupt
+// bewegt werden muss.
+const CAMERA_FADE_OPACITY = 0.12; // fast unsichtbar, aber die Silhouette bleibt erkennbar (kein hartes Verschwinden)
+let fadedOccluderRoots = new Set(); // aktuell (teil-)ausgeblendete Objekte
+let fadeAnimMeshes = new Set(); // Meshes mit noch laufender Opacity-Animation (rein/raus)
+// Läuft vom getroffenen Mesh die Elternkette hoch bis zu dem Objekt, das
+// tatsächlich per registerWorldObstacle() registriert wurde (markiert via
+// __isCameraOccluderRoot) - ein Raycast-Treffer landet oft auf einem
+// einzelnen Kind-Mesh (z.B. nur dem Dach), aber ausgeblendet werden muss das
+// GANZE Gebäude, nicht nur das getroffene Teil.
+function getOccluderRoot(obj){
+  let o = obj;
+  while(o){ if(o.__isCameraOccluderRoot) return o; o = o.parent; }
+  return null;
+}
+function occluderRootMeshes(root){
+  if(!root.__occluderMeshCache){
+    const meshes = [];
+    root.traverse(n => { if(n.isMesh) meshes.push(n); });
+    root.__occluderMeshCache = meshes;
+  }
+  return root.__occluderMeshCache;
+}
+// Schaltet ein einzelnes Mesh Richtung ausgeblendet/eingeblendet - klont das
+// Material NUR für dieses eine Mesh (siehe buildCottage & Co.: cottageWallMat/
+// woodMat/etc. sind bewusst GETEILTE Materialien über viele Objekte hinweg -
+// z.B. nutzen alle 4 Hütten dasselbe cottageWallMat. Würde man dessen Opacity
+// direkt verändern, würden ALLE Hütten gleichzeitig ausgeblendet, nicht nur
+// die eine, die gerade im Weg steht). Die Original-Material-Referenz bleibt
+// dabei komplett unangetastet - andere Objekte, die dasselbe Material nutzen,
+// merken davon nichts.
+function setMeshFadeTarget(mesh, faded){
+  if(!mesh.__fadeMaterial){
+    const orig = mesh.material;
+    const clone = orig.clone();
+    clone.transparent = true;
+    clone.depthWrite = false; // vermeidet Sortier-Artefakte mit anderen transparenten Objekten (z.B. Fensterglas) während der Überblendung
+    mesh.__origMaterial = orig;
+    mesh.__origOpacity = orig.transparent ? orig.opacity : 1;
+    mesh.__fadeMaterial = clone;
+  }
+  mesh.material = mesh.__fadeMaterial;
+  mesh.__fadeTarget = faded ? CAMERA_FADE_OPACITY : mesh.__origOpacity;
+  fadeAnimMeshes.add(mesh);
+}
+// Läuft JEDEN Frame (nicht nur bei den gedrosselten 100ms-Raycast-Messungen),
+// damit die Opacity-Änderung sich weich anfühlt statt hart umzuspringen.
+function updateOccluderFades(){
+  if(!fadeAnimMeshes.size) return;
+  fadeAnimMeshes.forEach(mesh => {
+    const mat = mesh.__fadeMaterial;
+    if(!mat){ fadeAnimMeshes.delete(mesh); return; }
+    mat.opacity += (mesh.__fadeTarget - mat.opacity) * 0.2;
+    if(Math.abs(mat.opacity - mesh.__fadeTarget) < 0.01){
+      mat.opacity = mesh.__fadeTarget;
+      if(mesh.__fadeTarget >= mesh.__origOpacity - 0.001){
+        // Voll zurück-eingeblendet - Original-Material wiederherstellen statt
+        // dauerhaft mit dem geklonten Material weiterzurendern (spart
+        // Speicher/Vergleichbarkeit, falls das Original später anderswo
+        // direkt referenziert/verglichen wird).
+        mesh.material = mesh.__origMaterial;
+      }
+      fadeAnimMeshes.delete(mesh);
+    }
+  });
+}
 function updateEngineCamera(){
   if(!engineReady) return;
   if(!itemViewerActive && !camTargetManuallySet){
@@ -3048,74 +3126,58 @@ function updateEngineCamera(){
   const dirX = Math.sin(camYaw)*Math.cos(camPitch);
   const dirY = Math.sin(camPitch);
   const dirZ = Math.cos(camYaw)*Math.cos(camPitch);
-  // Kamera-Kollisionsvermeidung: prüft per Raycast, ob ein Gebäude (Hütte,
-  // Landmarke) zwischen Charakter und gewünschter Kamera-Position liegt,
-  // und zieht die Kamera in diesem Fall näher heran, statt hindurchzuclippen
-  // oder die Sicht zu blockieren.
+  // Kamera-Verdeckung: prüft per Raycast, ob ein Gebäude (Hütte, Landmarke)
+  // zwischen Charakter und der (immer gleich weit entfernten) Kamera-Position
+  // liegt - und blendet es in diesem Fall aus, statt die Kamera heranzuziehen
+  // (siehe große Erklärung oben bei den Fade-Funktionen für das Warum).
   //
   // Nur ECHTE Häuser (Hütten, Haus der Dorfältesten, Schmiede) zählen als
   // Kamera-Hindernis - kleinere Wahrzeichen (Brunnen, Marktstand, Karren,
   // Statue, Garten, Kristall-Platz, Portal, Waldeingang) sind bewusst
   // ausgenommen (cameraOccluder:false bei ihrer registerWorldObstacle()-
-  // Registrierung), genau wie Hügel und normale Bäume schon vorher. Bei ~14
-  // Landmarken auf recht engem Raum löste sonst schon die bloße Nähe zu einem
-  // niedrigen Deko-Objekt ständig ein Heranzoomen aus ("ich sehe nur noch den
-  // Rücken"). Diese kleineren Objekte bleiben natürlich weiterhin ganz normale
-  // Bewegungs-Hindernisse (worldObstacles) - nur die Kamera ignoriert sie.
+  // Registrierung), genau wie Hügel und normale Bäume schon vorher. Diese
+  // kleineren Objekte bleiben natürlich weiterhin ganz normale Bewegungs-
+  // Hindernisse (worldObstacles) - nur die Kamera ignoriert sie.
   //
-  // Bewusst NICHT jeden Frame (60x/Sekunde) neu gemessen: beim Erkunden dreht
-  // sich die Kamera laufend leicht mit, wodurch der Sichtstrahl an Kanten von
-  // Bäumen/Zäunen sonst ständig zwischen "frei" und "blockiert" hin- und
-  // herkippen würde ("Pulsieren"). Stattdessen höchstens alle 100ms neu
-  // messen, UND beim Freiwerden erst nach mehreren aufeinanderfolgenden
-  // freien Messungen wieder rauszoomen (asymmetrische Trägheit) - ein neues
-  // Hindernis wird weiterhin sofort übernommen, damit die Kamera nie in eine
-  // Wand clippt, nur das Zurück-Zoomen wird beruhigt.
-  let effectiveDist = camDistance;
+  // Die eigentliche Messung bleibt weiterhin höchstens alle 100ms neu
+  // gemacht (nicht jeden Frame) - beim Erkunden dreht sich die Kamera laufend
+  // leicht mit, das würde an Kanten sonst ständig zwischen "frei" und
+  // "blockiert" hin- und herkippen. Das Fade-System selbst federt das
+  // zusätzlich ab (siehe updateOccluderFades): auch ein sofortiges Umschalten
+  // des Ziels wird über mehrere Frames weich überblendet, kein hartes
+  // Ein/Ausblenden.
   if(exploreMode && cameraOccluders.length){
     const now = performance.now();
-    if(occlusionEffectiveDist === null || now - lastOcclusionSampleT > 100){
+    if(now - lastOcclusionSampleT > 100){
       lastOcclusionSampleT = now;
       if(!cameraRaycaster) cameraRaycaster = new THREE.Raycaster();
       cameraRaycaster.set(camTarget, new THREE.Vector3(dirX,dirY,dirZ).normalize());
       cameraRaycaster.far = camDistance;
+      // ALLE Treffer entlang des Strahls (nicht nur der nächste) - falls
+      // mehrere Objekte hintereinander im Weg stehen, müssen alle ausgeblendet
+      // werden, sonst bliebe die Sicht trotzdem blockiert.
       const hits = cameraRaycaster.intersectObjects(cameraOccluders, true);
-      if(hits.length && hits[0].distance < camDistance){
-        // Zwei GETRENNTE Mindestabstände spielen hier zusammen, nachdem beide
-        // schon einzeln zu Bugs geführt hatten:
-        // 1) CAM_SELF_CLIP_MIN - die Kamera darf nie so nah an camTarget
-        //    heran, dass sie im eigenen Charaktermesh (Haare/Kopf) steckt.
-        // 2) Die Wand selbst - die Kamera darf NIE weiter als die tatsächlich
-        //    gemessene freie Strecke hinausgeschoben werden (das war der
-        //    ursprüngliche "durch die Wand"-Bug: ein fixer Boden von 3.5
-        //    wurde angewendet, obwohl die Wand nur ~0.9 entfernt war).
-        // Diese beiden Grenzen können sich widersprechen (Charakter steht
-        // dicht an einer Wand - dann ist der Platz zwischen "eigene Haare"
-        // und "Wandoberfläche" schlicht schmaler als CAM_SELF_CLIP_MIN).
-        // In diesem seltenen Fall hat "nicht durch die Wand clippen" Vorrang
-        // (Math.min ganz außen) - kurzzeitig etwas zu nah am eigenen Kopf zu
-        // sein, ist unauffälliger als eine Wand von innen zu sehen.
-        const wallSurface = hits[0].distance - 0.1; // winziger Sicherheitsabstand, nie die Wandoberfläche selbst berühren
-        const preferred = Math.max(CAM_SELF_CLIP_MIN, hits[0].distance - 0.4);
-        occlusionEffectiveDist = Math.min(preferred, wallSurface);
-        occlusionClearStreak = 0;
-      } else {
-        occlusionClearStreak++;
-        if(occlusionClearStreak >= 3) occlusionEffectiveDist = camDistance;
-      }
+      const newFadedRoots = new Set();
+      hits.forEach(hit => {
+        const root = getOccluderRoot(hit.object);
+        if(root) newFadedRoots.add(root);
+      });
+      newFadedRoots.forEach(root => {
+        if(!fadedOccluderRoots.has(root)) occluderRootMeshes(root).forEach(m => setMeshFadeTarget(m, true));
+      });
+      fadedOccluderRoots.forEach(root => {
+        if(!newFadedRoots.has(root)) occluderRootMeshes(root).forEach(m => setMeshFadeTarget(m, false));
+      });
+      fadedOccluderRoots = newFadedRoots;
     }
-    effectiveDist = occlusionEffectiveDist;
+  } else if(fadedOccluderRoots.size){
+    // Erkunden verlassen (z.B. Popup geöffnet) - alles wieder einblenden,
+    // sonst bliebe ein Gebäude dauerhaft durchsichtig hängen.
+    fadedOccluderRoots.forEach(root => occluderRootMeshes(root).forEach(m => setMeshFadeTarget(m, false)));
+    fadedOccluderRoots = new Set();
   }
-  // Sanft zur Ziel-Distanz überblenden statt hart zu springen - verhindert
-  // ruckartige Kamera-Sprünge, wenn der Raycast von Frame zu Frame ein
-  // anderes (oder kein) Hindernis mehr trifft. Nur beim Erkunden aktiv -
-  // der Zoom in den statischen Ansichten bleibt weiterhin sofort reaktiv.
-  if(exploreMode){
-    if(smoothedCamDist === null) smoothedCamDist = effectiveDist;
-    smoothedCamDist += (effectiveDist - smoothedCamDist) * 0.12;
-  } else {
-    smoothedCamDist = effectiveDist;
-  }
+  updateOccluderFades();
+  const smoothedCamDist = camDistance;
   engineCamera.position.set(
     camTarget.x + smoothedCamDist*dirX,
     camTarget.y + smoothedCamDist*dirY,
