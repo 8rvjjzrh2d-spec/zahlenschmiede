@@ -2921,7 +2921,21 @@ function updateCrystalPlazaVisual(){
 // Kamera-Reset-Knopf (CAMERA_PRESETS.fullBody) schon verwendet. Bei 17 reichte
 // der Kamera-Kollisions-Suchstrahl so weit, dass er im recht kompakten Dorf
 // ständig irgendetwas traf, bevor man überhaupt manuell gezoomt hatte.
-let camDistance = 10.5, camYaw = 0.5, camPitch = 0.26;
+// camYaw-Start: klassische Third-Person-Ansicht wie z.B. in Zelda-Spielen -
+// Kamera direkt HINTER dem Charakter, blickt über seine Schulter in die
+// Richtung, in die er schaut. camYaw = charRotY + π erreicht das (siehe
+// dirX/dirZ-Formel unten: sin/cos(camYaw) folgt derselben Konvention wie die
+// Blickrichtung des Charakters selbst, +π dreht sie exakt auf die
+// gegenüberliegende Seite - dorthin, wo der Rücken des Charakters ist).
+// Vorher stand hier ein unabhängig gewählter fester Wert (0.5), der zufällig
+// eher seitlich als hinter dem Charakter lag. charRotY selbst wird erst
+// weiter unten im Skript als eigene Variable deklariert (Standardwert -0.4)
+// - hier direkt der berechnete Literalwert, da camYaw schon bei der
+// Skript-Ausführung existieren muss, lange bevor charRotY initialisiert
+// wird. Bei einer künftigen Änderung von charRotYs Standardwert diesen Wert
+// entsprechend mitziehen (siehe CAMERA_PRESETS.fullBody.yaw weiter unten,
+// die denselben Wert für den Kamera-Reset-Knopf nutzt).
+let camDistance = 10.5, camYaw = -0.4 + Math.PI, camPitch = 0.26;
 let camTargetManuallySet = false;
 let camTarget = null;
 const CAM_DIST_MIN = 3.5, CAM_DIST_MAX = 18;
@@ -2994,7 +3008,7 @@ let itemViewerActive = false;
 // Kamera-Voreinstellungen (Ziel, Distanz, Blickwinkel). x ist negativ, weil der
 // Halte-Arm (Ausrüstung) auf der Welt-negativen X-Seite sitzt.
 const CAMERA_PRESETS = {
-  fullBody: { target:[0, 2.9, 0],    distance:10.5, yaw:0.5, pitch:0.12 },
+  fullBody: { target:[0, 2.9, 0],    distance:10.5, yaw:-0.4 + Math.PI, pitch:0.12 }, // gleicher "hinter dem Charakter"-Winkel wie der Start-camYaw oben - siehe Kommentar dort
   face:     { target:[0, 3.45, 0],   distance:2.6,  yaw:0.35, pitch:0.05 },
   gear:     { target:[-0.55, 2.0, 0.25], distance:2.6, yaw:0.9, pitch:0.1 },
   pets:     { target:[0.3, 0.35, 0.6], distance:4.5, yaw:0.5, pitch:0.2 }
