@@ -2919,6 +2919,21 @@ let camDistance = 10.5, camYaw = 0.5, camPitch = 0.26;
 let camTargetManuallySet = false;
 let camTarget = null;
 const CAM_DIST_MIN = 3.5, CAM_DIST_MAX = 18;
+// Basis-Lichtwerte für die Überwelt-Biome (nicht Höhle/Nether) - EIN Ort für
+// diese Zahlen, referenziert sowohl bei der Erstellung der Lichter als auch
+// in applyEnvironment() (dort werden sie bei JEDEM Biom-/Bildschirmwechsel
+// neu gesetzt). Genau das war ein realer Bug: die Kontrast-Anpassung wurde
+// nur beim Erstellen der Lichter geändert, aber applyEnvironment() setzte bei
+// jedem Login/Biomwechsel eigene fest einprogrammierte Werte, die die
+// Änderung sofort wieder überschrieben - der Effekt kam beim Spielen nie an.
+const OVERWORLD_HEMI_INTENSITY = 0.42, OVERWORLD_SUN_INTENSITY = 1.05;
+// Nebel-Start/Ende: EXPLORE_RADIUS ist 40 - ein Nebel-Start von 18 (alter
+// Wert) ließ fast die gesamte äußere Hälfte des begehbaren Bereichs bereits
+// spürbar Richtung Nebelfarbe verblassen, wodurch entfernte Gebäude/Hügel
+// blass und detailarm wirkten. Deutlich weiter hinausgeschoben, damit der
+// Großteil des Dorfes klar/farbig bleibt - der Nebel dient jetzt nur noch
+// dazu, den Horizont/Rand weich auslaufen zu lassen statt hart abzuschneiden.
+const OVERWORLD_FOG_NEAR = 30, OVERWORLD_FOG_FAR = 95;
 const CAM_TARGET_BODY_Y = 3.4;   // Rahmung bei normalem Zoom - etwas über Kopfhöhe, Charakter + Haustiere + Kopfraum komplett sichtbar
 const CAM_TARGET_FACE_Y = 3.4;   // Rahmung beim Hineinzoomen (Gesicht bleibt zentriert)
 
@@ -3242,11 +3257,18 @@ function setSceneEnvironment(env){
     skyMesh.material.map = makeSkyTexture(v.sky);
     skyMesh.material.needsUpdate = true;
     engineScene.background = null;
-    hemiLight.intensity = 0.55;
+    // WICHTIG: dieselben Basiswerte wie bei der Licht-Erstellung (siehe
+    // OVERWORLD_HEMI_INTENSITY/OVERWORLD_SUN_INTENSITY weiter oben) - das war
+    // vorher ein realer Bug: applyEnvironment() lief bei JEDEM Login/
+    // Biomwechsel und setzte eigene, ältere fest einprogrammierte Werte
+    // (0.55/0.85), die eine spätere Kontrast-Anpassung an der Lichtquelle
+    // beim nächsten Bildschirmwechsel sofort wieder unbemerkt rückgängig
+    // gemacht hätten.
+    hemiLight.intensity = OVERWORLD_HEMI_INTENSITY;
     hemiLight.groundColor.setHex(v.ambient);
-    sunLight.intensity = 0.85;
+    sunLight.intensity = OVERWORLD_SUN_INTENSITY;
     engineScene.fog.color.setHex(v.ground);
-    engineScene.fog.near = 18; engineScene.fog.far = 70;
+    engineScene.fog.near = OVERWORLD_FOG_NEAR; engineScene.fog.far = OVERWORLD_FOG_FAR;
   } else {
     engineScene.background = new THREE.Color(sk === 'nether' ? 0x1a0805 : 0x0e0e12);
     hemiLight.intensity = 0.18;
@@ -5527,14 +5549,14 @@ try{
   engineRenderer.outputEncoding = THREE.sRGBEncoding;
   engineRenderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-  engineScene.fog = new THREE.Fog(0xdce8e0, 18, 70);
+  engineScene.fog = new THREE.Fog(0xdce8e0, OVERWORLD_FOG_NEAR, OVERWORLD_FOG_FAR);
 
   // Etwas weniger Ambient-Fülllicht + etwas stärkere Sonne = mehr Kontrast
   // zwischen Licht und Schatten statt der vorher recht flach/blass wirkenden
   // Ausleuchtung (Nutzer-Feedback: "alles sehr hell, fast pastellfarbig").
-  hemiLight = new THREE.HemisphereLight(0xffffff, 0x555555, 0.42);
+  hemiLight = new THREE.HemisphereLight(0xffffff, 0x555555, OVERWORLD_HEMI_INTENSITY);
   engineScene.add(hemiLight);
-  sunLight = new THREE.DirectionalLight(0xfff3d6, 1.05);
+  sunLight = new THREE.DirectionalLight(0xfff3d6, OVERWORLD_SUN_INTENSITY);
   sunLight.position.set(3,6,4);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(1024,1024);
