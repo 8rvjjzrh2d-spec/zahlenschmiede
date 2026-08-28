@@ -8090,6 +8090,19 @@ function randomizeAppearance(){
   rebuildCharacter();
 }
 
+// Sichtbarkeit der Begleiter-Tiere (activePets) und des wilden, noch nicht
+// entdeckten Tiers (wildPetInstance) umschalten - beide hängen direkt an
+// engineScene (NICHT an biomeGroups), werden vom "Rest der Szene ausblenden"
+// der beiden Betrachter unten also sonst übersehen. Bugreport, real
+// reproduziert: im Item-/Haustier-Betrachter waren dadurch alle aktuell
+// aktivierten Begleiter im Hintergrund mit sichtbar, nicht nur das
+// betrachtete Tier/der betrachtete Gegenstand. EIN gemeinsamer Helfer statt
+// vier separater Kopien (open/close × Item/Pet), damit dieser Fehler nicht
+// ein drittes Mal an nur einer der vier Stellen wieder einschleicht.
+function setWorldCompanionsVisible(visible){
+  activePets.forEach(pet => { if(pet.group) pet.group.visible = visible; });
+  if(wildPetInstance && wildPetInstance.group) wildPetInstance.group.visible = visible;
+}
 // -- Eigenständiger Item-Betrachter: einzelnes Werkzeug isoliert drehen/zoomen (auch zum Debuggen nützlich)
 let itemViewerGroup = null;
 let itemViewerSavedCam = null;
@@ -8101,6 +8114,7 @@ function openItemViewer(item){
   if(biomeGroups) Object.keys(biomeGroups).forEach(k => { biomeGroups[k].visible = false; });
   skyMesh.visible = false; sunDisc.visible = false; groundPlane.visible = false;
   if(lumiGroup) lumiGroup.visible = false;
+  setWorldCompanionsVisible(false);
   itemViewerSavedFog = engineScene.fog;
   engineScene.fog = null;
   engineScene.background = new THREE.Color(0x2a2a30);
@@ -8137,6 +8151,7 @@ function closeItemViewer(){
   if(itemViewerSavedCam){ camDistance = itemViewerSavedCam.camDistance; camYaw = itemViewerSavedCam.camYaw; camPitch = itemViewerSavedCam.camPitch; }
   characterRoot.visible = true;
   if(lumiGroup) lumiGroup.visible = true;
+  setWorldCompanionsVisible(true);
   updateEngineCamera(); // Kamera-Position tatsächlich neu berechnen, sonst bleibt sie an der Item-Vorschau-Stelle stehen
   renderInventoryScreen(); // stellt Charakter/Umgebung/Sichtbarkeit korrekt wieder her
 }
@@ -8195,6 +8210,7 @@ function openPetViewer(petId){
   if(biomeGroups) Object.keys(biomeGroups).forEach(k => { biomeGroups[k].visible = false; });
   skyMesh.visible = false; sunDisc.visible = false; groundPlane.visible = false;
   if(lumiGroup) lumiGroup.visible = false; // war die tatsächliche Ursache des "schwebenden Diamanten" - Lumi lebt dauerhaft in der Szene
+  setWorldCompanionsVisible(false); // sonst waren alle aktivierten Begleiter im Hintergrund mit sichtbar, nicht nur das betrachtete Tier
   petViewerSavedFog = engineScene.fog;
   engineScene.fog = null;
   engineScene.background = new THREE.Color(0x2a2a30);
@@ -8224,6 +8240,7 @@ function closePetViewer(){
   if(petViewerSavedCam){ camDistance = petViewerSavedCam.camDistance; camYaw = petViewerSavedCam.camYaw; camPitch = petViewerSavedCam.camPitch; }
   characterRoot.visible = true;
   if(lumiGroup) lumiGroup.visible = true;
+  setWorldCompanionsVisible(true);
   updateEngineCamera();
   renderPetMenuScreen(); // stellt das Pet-Menü (inkl. Kartenvorschauen) korrekt wieder her
 }
