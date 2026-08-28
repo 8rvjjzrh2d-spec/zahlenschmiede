@@ -6253,8 +6253,12 @@ try{
   })();
 
   // Verlassener Karren (umgekippt, ein Rad fehlt)
+  // Position von (9,-11) verschoben (siehe Bugreport: stand teils im
+  // Hügel-Fußabdruck von makeHill(wieseGroup,14,-10,6.5,...) - per
+  // Spiralsuche mit dem tatsächlichen Fußabdruck-Radius des Karrens
+  // (~3.1, aus __colliderFootprint) radial aus dem Hügel heraus verschoben.
   (function(){
-    const g = new THREE.Group(); g.position.set(9,0,-11); g.rotation.y=0.6; g.rotation.z=0.25;
+    const g = new THREE.Group(); g.position.set(3.09,0,-9.96); g.rotation.y=0.6; g.rotation.z=0.25;
     const bed = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,0.9), woodMat); bed.position.y=0.5; g.add(bed);
     const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.1,10), woodMat); wheel.rotation.x=Math.PI/2; wheel.position.set(-0.6,0.35,0.5); g.add(wheel);
     g.scale.setScalar(2.2);
@@ -6335,8 +6339,13 @@ try{
       patrolT: Math.random()*10, walkPhase: Math.random()*10
     };
   }
-  villagerFigures.push(buildVillagerFigure(11,-8,0x5a7ac9,1,'#e0d8c8'));   // Dorfälteste (nahe ihrem Haus) - graues Haar
-  villagerFigures.push(buildVillagerFigure(-13,5,0x2a2a2a,1,'#2a231c'));  // Schmied (nahe der Schmiede) - dunkles Haar
+  // Positionen für Dorfälteste/Schmied nachträglich verschoben (siehe
+  // Bugreport: beide standen ursprünglich teils IM Hügel-Fußabdruck, nur der
+  // Oberkörper ragte heraus) - per Spiralsuche (isWorldPositionFree) radial
+  // aus dem jeweiligen Hügel heraus verschoben, auf demselben Weg wie schon
+  // die 4 Hütten weiter oben im "Automatischer Kollisions-Fußabdruck"-Fund.
+  villagerFigures.push(buildVillagerFigure(7.24,-5.53,0x5a7ac9,1,'#e0d8c8'));  // Dorfälteste (nahe ihrem Haus) - graues Haar
+  villagerFigures.push(buildVillagerFigure(-12.23,2.62,0x2a2a2a,1,'#2a231c')); // Schmied (nahe der Schmiede) - dunkles Haar
   villagerFigures.push(buildVillagerFigure(-5,-8,0x6a9c4a,1,'#8a5a2a'));  // Bäuerin (nahe dem Garten) - braunes Haar
   villagerFigures.push(buildVillagerFigure(4,9,0xc97a4a,0.72,'#e0b84a')); // Kind (nahe dem Brunnen) - kleiner, blondes Haar
 
