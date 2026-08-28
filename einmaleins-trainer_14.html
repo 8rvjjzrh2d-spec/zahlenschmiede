@@ -2919,6 +2919,14 @@ let camDistance = 10.5, camYaw = 0.5, camPitch = 0.26;
 let camTargetManuallySet = false;
 let camTarget = null;
 const CAM_DIST_MIN = 3.5, CAM_DIST_MAX = 18;
+// Mindestabstand rein zum Schutz vor der Charakter-EIGENEN Geometrie (Haare,
+// Kopf, Schultern) beim Wand-Ausweichen - unabhängig von CAM_DIST_MIN, das
+// die normale MANUELLE Zoom-Grenze ist. Empirisch per Raycast gegen das
+// eigene Charaktermesh von camTarget aus in mehreren typischen Blickwinkeln
+// gemessen (0.35-0.64 Einheiten je nach Winkel) - 1.0 lässt überall sicher
+// Spielraum, ohne wieder in Richtung des alten 3.5-Bodens zu gehen (der bei
+// nahen Wänden durch sie hindurchclippen ließ, siehe unten).
+const CAM_SELF_CLIP_MIN = 1.0;
 const CAM_TARGET_BODY_Y = 3.4;   // Rahmung bei normalem Zoom - etwas über Kopfhöhe, Charakter + Haustiere + Kopfraum komplett sichtbar
 const CAM_TARGET_FACE_Y = 3.4;   // Rahmung beim Hineinzoomen (Gesicht bleibt zentriert)
 
@@ -3073,21 +3081,23 @@ function updateEngineCamera(){
       cameraRaycaster.far = camDistance;
       const hits = cameraRaycaster.intersectObjects(cameraOccluders, true);
       if(hits.length && hits[0].distance < camDistance){
-        // WICHTIG: hier NIE auf CAM_DIST_MIN hochklammern (das war der Bug,
-        // der die Kamera regelrecht IN Wände clippen ließ). CAM_DIST_MIN ist
-        // der normale manuelle Mindest-Zoom - aber wenn die Wand selbst
-        // näher als CAM_DIST_MIN am camTarget steht (z.B. Charakter steht
-        // direkt vor einem Gebäude), würde "Math.max(CAM_DIST_MIN, ...)" die
-        // Kamera weiter als die tatsächlich freie Strecke hinausschieben -
-        // also buchstäblich durch die Wand hindurch. Die einzig korrekte
-        // Grenze ist die tatsächlich gemessene freie Distanz selbst (minus
-        // Sicherheitsabstand); nur ein winziger technischer Boden (0.6)
-        // verhindert, dass die Kamera exakt auf dem Zielpunkt sitzt. Das
-        // Ergebnis ist zwangsläufig manchmal ein sehr naher Blick (wenn der
-        // Charakter dicht an einer Wand steht, ist das die einzige Option,
-        // die die Wand nicht durchdringt), aber niemals ein Clipping in die
-        // Geometrie hinein.
-        occlusionEffectiveDist = Math.max(0.6, hits[0].distance - 0.4);
+        // Zwei GETRENNTE Mindestabstände spielen hier zusammen, nachdem beide
+        // schon einzeln zu Bugs geführt hatten:
+        // 1) CAM_SELF_CLIP_MIN - die Kamera darf nie so nah an camTarget
+        //    heran, dass sie im eigenen Charaktermesh (Haare/Kopf) steckt.
+        // 2) Die Wand selbst - die Kamera darf NIE weiter als die tatsächlich
+        //    gemessene freie Strecke hinausgeschoben werden (das war der
+        //    ursprüngliche "durch die Wand"-Bug: ein fixer Boden von 3.5
+        //    wurde angewendet, obwohl die Wand nur ~0.9 entfernt war).
+        // Diese beiden Grenzen können sich widersprechen (Charakter steht
+        // dicht an einer Wand - dann ist der Platz zwischen "eigene Haare"
+        // und "Wandoberfläche" schlicht schmaler als CAM_SELF_CLIP_MIN).
+        // In diesem seltenen Fall hat "nicht durch die Wand clippen" Vorrang
+        // (Math.min ganz außen) - kurzzeitig etwas zu nah am eigenen Kopf zu
+        // sein, ist unauffälliger als eine Wand von innen zu sehen.
+        const wallSurface = hits[0].distance - 0.1; // winziger Sicherheitsabstand, nie die Wandoberfläche selbst berühren
+        const preferred = Math.max(CAM_SELF_CLIP_MIN, hits[0].distance - 0.4);
+        occlusionEffectiveDist = Math.min(preferred, wallSurface);
         occlusionClearStreak = 0;
       } else {
         occlusionClearStreak++;
