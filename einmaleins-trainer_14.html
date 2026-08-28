@@ -2932,6 +2932,7 @@ const CAM_DIST_MIN = 3.5, CAM_DIST_MAX = 18;
 // verbessern. 0.48 ist ein Mittelweg zwischen "zu flach" (0.55, Original)
 // und "Schattenseite zu dunkel" (0.42).
 const OVERWORLD_HEMI_INTENSITY = 0.48, OVERWORLD_SUN_INTENSITY = 1.05;
+const RIM_BASE_INTENSITY = 0.9; // siehe "Gebäude sehen blass aus"-Fix weiter unten - referenziert auch vom Tag/Nacht-Zyklus (dort tagsüber voll, nachts abgeschwächt)
 // Nebel-Start/Ende: EXPLORE_RADIUS ist 40 - ein Nebel-Start von 18 (alter
 // Wert) ließ fast die gesamte äußere Hälfte des begehbaren Bereichs bereits
 // spürbar Richtung Nebelfarbe verblassen, wodurch entfernte Gebäude/Hügel
@@ -2939,6 +2940,46 @@ const OVERWORLD_HEMI_INTENSITY = 0.48, OVERWORLD_SUN_INTENSITY = 1.05;
 // Großteil des Dorfes klar/farbig bleibt - der Nebel dient jetzt nur noch
 // dazu, den Horizont/Rand weich auslaufen zu lassen statt hart abzuschneiden.
 const OVERWORLD_FOG_NEAR = 30, OVERWORLD_FOG_FAR = 95;
+
+// =====================================================================
+// TAG/NACHT-ZYKLUS
+// Ein voller Zyklus dauert DAY_LENGTH_SECONDS Sekunden Echtzeit (6 Minuten
+// als Standard - lang genug, um nicht hektisch zu wirken, kurz genug, dass
+// eine normale Spielsitzung mindestens einen Wechsel mitbekommt). dayPhase
+// läuft 0->1 über einen vollen Zyklus; sunHeight ist der Sinus davon
+// (-1 = tiefste Nacht, 0 = Sonnenauf-/-untergang, +1 = Mittag). Beides wird
+// jeden Frame in updateEngineCamera() aktualisiert (dort läuft ohnehin schon
+// die Sonnen-Nachführung) und ist absichtlich GLOBAL lesbar, damit z.B. das
+// Bett (siehe LANDMARK_DEFS) einfach prüfen kann, ob gerade Nacht ist.
+// dayOffsetSeconds wird beim Schlafen erhöht, um zum nächsten Morgen
+// vorzuspulen, OHNE die echte Spielzeit/engineClock selbst zu verändern.
+const DAY_LENGTH_SECONDS = 360;
+let dayOffsetSeconds = 0;
+let dayPhase = 0.25, sunHeight = 1; // Startwert: heller Vormittag, bis der erste Frame lief
+const NIGHT_HEMI_INTENSITY = 0.2; // Boden einer Untergrenze, damit es nachts nie komplett schwarz wird
+// Bewusst nur einfache Hex-Zahlen hier, KEINE new THREE.Color(...) - dieser
+// Block läuft ganz oben im Skript, weit vor dem try{}-Block, der prüft, ob
+// THREE.js überhaupt geladen hat. Ein "new THREE.Color(...)" hier würde bei
+// fehlgeschlagenem CDN-Laden sofort einen ReferenceError werfen und damit
+// das GESAMTE Skript abbrechen (auch Konten/Aufgaben/Werkstatt) - genau das,
+// was der spätere try/catch eigentlich verhindern soll. Echte THREE.Color-
+// Objekte werden erst innerhalb der Update-Funktion erzeugt, die ohnehin nur
+// nach erfolgreichem engineReady läuft.
+const NIGHT_SKY_TINT_HEX = 0x1a2244, DAY_SKY_TINT_HEX = 0xffffff;
+const NIGHT_HEMI_SKY_HEX = 0x2a3a6a, DAY_HEMI_SKY_HEX = 0xffffff;
+const NIGHT_FOG_TINT_HEX = 0x141830;
+function sleepUntilMorning(){
+  // Springt zuverlässig zum NÄCHSTEN Sonnenaufgang, egal in welcher
+  // Zyklus-Phase gerade geschlafen wird - Rest der aktuellen Phase bis zum
+  // Zyklus-Ende (=Sonnenaufgang bei Phase 0) plus ein kleines Stück weiter,
+  // damit man kurz NACH dem exakten Sonnenaufgang aufwacht, nicht exakt
+  // darauf (sonst wäre sunHeight in genau diesem Frame noch 0).
+  const t = engineClock ? engineClock.getElapsedTime() : 0;
+  const cur = (t + dayOffsetSeconds) % DAY_LENGTH_SECONDS;
+  const remaining = DAY_LENGTH_SECONDS - cur;
+  dayOffsetSeconds += remaining + DAY_LENGTH_SECONDS*0.03;
+}
+// =====================================================================
 const CAM_TARGET_BODY_Y = 3.4;   // Rahmung bei normalem Zoom - etwas über Kopfhöhe, Charakter + Haustiere + Kopfraum komplett sichtbar
 const CAM_TARGET_FACE_Y = 3.4;   // Rahmung beim Hineinzoomen (Gesicht bleibt zentriert)
 
@@ -3137,6 +3178,48 @@ function updateOccluderFades(){
     }
   });
 }
+// Tag/Nacht-Zyklus: Sonnenrichtung/-höhe berechnen und alle davon
+// abhängigen Licht-/Himmel-/Nebel-Werte setzen. Eigene Funktion (statt
+// direkt in updateEngineCamera), damit sleepUntilMorning() & Co. nicht
+// wissen müssen, WIE die Werte zustande kommen - nur dayPhase/sunHeight
+// lesen reicht. Läuft trotzdem jeden Frame von dort aus (siehe unten),
+// da die Sonnen-Nachführung ohnehin schon dort verankert ist.
+// Wiederverwendete THREE.Color-Objekte statt jeden Frame neue anzulegen
+// (spart unnötigen Garbage-Collector-Druck bei 60x/Sekunde) - werden beim
+// allerersten Aufruf angelegt (THREE ist zu diesem Zeitpunkt garantiert
+// geladen, siehe Kommentar bei den Hex-Konstanten weiter oben).
+let __dnNightHemiSky = null, __dnDayHemiSky = null, __dnNightSky = null, __dnDaySky = null, __dnNightFog = null, __dnTmpColor = null;
+function updateDayNightCycle(t){
+  if(!__dnTmpColor){
+    __dnNightHemiSky = new THREE.Color(NIGHT_HEMI_SKY_HEX); __dnDayHemiSky = new THREE.Color(DAY_HEMI_SKY_HEX);
+    __dnNightSky = new THREE.Color(NIGHT_SKY_TINT_HEX); __dnDaySky = new THREE.Color(DAY_SKY_TINT_HEX);
+    __dnNightFog = new THREE.Color(NIGHT_FOG_TINT_HEX);
+    __dnTmpColor = new THREE.Color();
+  }
+  const cycleT = ((t + dayOffsetSeconds) % DAY_LENGTH_SECONDS) / DAY_LENGTH_SECONDS;
+  dayPhase = cycleT;
+  const angle = cycleT * Math.PI * 2;
+  sunHeight = Math.sin(angle); // -1 (tiefste Nacht) .. 0 (Auf-/Untergang) .. +1 (Mittag)
+  const sunHoriz = Math.cos(angle);
+  // dayT: 0 nachts, 1 tagsüber, glatter Übergang dazwischen (nicht einfach
+  // Math.max(0,sunHeight), das hätte einen Knick genau am Horizont).
+  const dayT = Math.max(0, Math.min(1, sunHeight*1.6 + 0.5));
+  if(sunLight) sunLight.intensity = OVERWORLD_SUN_INTENSITY * Math.max(0, sunHeight);
+  if(hemiLight){
+    hemiLight.intensity = NIGHT_HEMI_INTENSITY + (OVERWORLD_HEMI_INTENSITY - NIGHT_HEMI_INTENSITY) * dayT;
+    hemiLight.color.copy(__dnNightHemiSky).lerp(__dnDayHemiSky, dayT);
+  }
+  if(rimLight) rimLight.intensity = RIM_BASE_INTENSITY * (0.35 + 0.65*dayT); // nachts schwächer, aber nie ganz aus - sonst wäre die sonnenabgewandte UND die Nachtseite gleichzeitig komplett dunkel
+  if(skyMesh) skyMesh.material.color.copy(__dnNightSky).lerp(__dnDaySky, dayT);
+  if(sunDisc){
+    sunDisc.visible = sunHeight > -0.08;
+    if(sunDisc.material) sunDisc.material.opacity = 0.95 * Math.max(0, sunHeight);
+  }
+  if(engineScene && engineScene.fog && engineScene.fog.__dayBaseColor){
+    engineScene.fog.color.copy(engineScene.fog.__dayBaseColor).lerp(__dnNightFog, 1-dayT);
+  }
+  return { angle, sunHoriz, dayT };
+}
 function updateEngineCamera(){
   if(!engineReady) return;
   // Schatten-Licht mit dem Charakter mitführen (siehe Kommentar bei der
@@ -3145,8 +3228,25 @@ function updateEngineCamera(){
   // Frame, unabhängig vom Bildschirm), damit es auch in der Werkstatt/
   // Anpassung/Item-Ansicht korrekt bleibt, nicht nur beim Erkunden.
   if(sunLight && characterRoot){
-    sunLight.position.set(characterRoot.position.x+3, characterRoot.position.y+6, characterRoot.position.z+4);
+    const t = engineClock ? engineClock.getElapsedTime() : 0;
+    const { sunHoriz } = updateDayNightCycle(t);
+    // Feste Grund-Distanz (5) und Höhen-/Seitversatz nach Tageszeit, damit
+    // die Sonne sichtbar über den Himmel wandert statt nur heller/dunkler zu
+    // werden - dieselbe Grundrichtung (ungefähr (3,6,4)) bleibt bei Mittag
+    // erhalten (Kompatibilität mit der bisherigen Schatten-/Beleuchtungs-
+    // Abstimmung), dreht sich aber im Tagesverlauf um den Charakter.
+    const sunDirX = sunHoriz*3 + 1, sunDirY = Math.max(1.5, sunHeight*6+4.5), sunDirZ = 4;
+    sunLight.position.set(characterRoot.position.x+sunDirX, characterRoot.position.y+sunDirY, characterRoot.position.z+sunDirZ);
     sunLight.target.position.set(characterRoot.position.x, characterRoot.position.y, characterRoot.position.z);
+    // Sichtbare Sonnenscheibe an Himmelskuppel mitwandern lassen, statt fest
+    // an der ursprünglichen (3,6,4)-Richtung hängen zu bleiben - sonst würde
+    // sie den ganzen Tag über an derselben Stelle am Himmel kleben, während
+    // das eigentliche Licht sich sichtbar bewegt (Widerspruch).
+    if(sunDisc){
+      const sd = new THREE.Vector3(sunDirX, sunDirY, sunDirZ).normalize().multiplyScalar(48);
+      sunDisc.position.set(characterRoot.position.x+sd.x, sd.y, characterRoot.position.z+sd.z);
+      sunDisc.lookAt(characterRoot.position.x, characterRoot.position.y, characterRoot.position.z);
+    }
   }
   if(!itemViewerActive && !camTargetManuallySet){
     const zoomT = Math.max(0, Math.min(1, 1 - (camDistance-CAM_DIST_MIN)/(CAM_DIST_MAX-CAM_DIST_MIN)));
@@ -3273,6 +3373,14 @@ function setSceneEnvironment(env){
     hemiLight.groundColor.setHex(v.ambient);
     sunLight.intensity = OVERWORLD_SUN_INTENSITY;
     engineScene.fog.color.setHex(v.ground);
+    // Der eigentliche Tages-Nebelton dieses Bioms, getrennt gemerkt - der
+    // Tag/Nacht-Zyklus (updateDayNightCycle()) blendet jeden Frame zwischen
+    // DIESER Farbe und einem dunklen Nachtton, würde aber ohne dieses
+    // gemerkte Original nach der ersten Nacht nicht mehr wissen, zu welchem
+    // Tageston er morgens zurückblenden soll (engineScene.fog.color selbst
+    // wird ja laufend überschrieben).
+    if(!engineScene.fog.__dayBaseColor) engineScene.fog.__dayBaseColor = new THREE.Color();
+    engineScene.fog.__dayBaseColor.setHex(v.ground);
     engineScene.fog.near = OVERWORLD_FOG_NEAR; engineScene.fog.far = OVERWORLD_FOG_FAR;
   } else {
     engineScene.background = new THREE.Color(sk === 'nether' ? 0x1a0805 : 0x0e0e12);
@@ -5611,7 +5719,7 @@ try{
   // Nebel-Anpassungen (bestätigt durch direkten Vergleichsrender derselben
   // Wand). Deutlich stärker und warm eingefärbt statt kühl - wirkt jetzt wie
   // vom Himmel reflektiertes Streulicht statt wie ein kalter Kunstlicht-Fill.
-  rimLight = new THREE.DirectionalLight(0xffe8c0, 0.9);
+  rimLight = new THREE.DirectionalLight(0xffe8c0, RIM_BASE_INTENSITY);
   rimLight.position.set(-5,3,-4);
   engineScene.add(rimLight);
   engineRenderer.toneMappingExposure = 1.0;
@@ -6061,6 +6169,28 @@ try{
   buildCottage(-13.8,-19.4,false);
   buildCottage(24.3,2.3,true);   // Ruine
   buildCottage(-22.4,-5.1,true); // Ruine
+
+  // Bett vor der ersten Hütte - Interaktion siehe LANDMARK_DEFS ('bed'):
+  // nachts schlafen, um bis zum nächsten Morgen vorzuspulen (Tag/Nacht-
+  // Zyklus, siehe updateDayNightCycle/sleepUntilMorning weiter oben). Die
+  // Hütten selbst sind nur massive Außenhüllen ohne begehbares Inneres
+  // (wie alle Gebäude hier) - das Bett steht daher bewusst direkt vor der
+  // Tür, nicht "drinnen", genau wie z.B. der Amboss vor der Schmiede.
+  (function(){
+    const frameMat = flatMaterial('#6b4423', 0.85);
+    const mattressMat = flatMaterial('#e8ddc8', 0.8);
+    const blanketMat = flatMaterial('#5a7ac9', 0.85);
+    const pillowMat = flatMaterial('#f5f0e0', 0.7);
+    const g = new THREE.Group(); g.position.set(6.8, 0, 3.4);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.4,0.3,2.0), frameMat); frame.position.y=0.15; g.add(frame);
+    const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.18,1.9), mattressMat); mattress.position.y=0.39; g.add(mattress);
+    const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.32,0.1,1.1), blanketMat); blanket.position.set(0,0.53,0.35); g.add(blanket);
+    const pillow = new THREE.Mesh(new THREE.BoxGeometry(1.2,0.14,0.4), pillowMat); pillow.position.set(0,0.55,-0.75); g.add(pillow);
+    [frame,mattress,blanket,pillow].forEach(m => { m.castShadow = true; m.receiveShadow = true; });
+    g.scale.setScalar(1.6); // kleiner als die 2.2x-Gebäudeskalierung - ein Möbelstück, kein Haus
+    registerWorldObstacle(g, { cameraOccluder:false }); // kleines Möbelstück, kein Haus - siehe Kamera-Kollisions-Kommentar
+    wieseGroup.add(g);
+  })();
 
   // Brunnen (Dorfmitte)
   (function(){
@@ -8300,6 +8430,21 @@ let lastExploreT = null;
 // nächstgelegenen Landmarke und zeigt bei Bedarf einen Hinweis/Glühen an.
 // =====================================================================
 const LANDMARK_DEFS = [
+  { id:'bed', name:'Bett', x:6.8, z:3.4, radius:2.2, biome:'plains',
+    // sunHeight<0.05 - nachts (und in der Dämmerung kurz davor/danach)
+    // nutzbar, siehe updateDayNightCycle() weiter oben. Tagsüber nur ein
+    // Hinweistext, keine Wirkung - "schlafen" soll sich nicht wie ein
+    // beliebiger Zeit-Skip-Knopf anfühlen, sondern zur Tageszeit passen.
+    getPrompt: () => sunHeight < 0.05 ? '🛌 Schlafen, bis es hell wird' : '🛌 Es ist schon hell - noch nicht müde',
+    getHighlightMats: () => [],
+    onInteract: () => {
+      if(sunHeight < 0.05){
+        sleepUntilMorning();
+        if(typeof showBackgroundUnlockToast === 'function') showBackgroundUnlockToast({ name:'☀️ Ausgeruht! Ein neuer Tag beginnt.', thumb:'#ffd54a' });
+      } else {
+        if(typeof showBackgroundUnlockToast === 'function') showBackgroundUnlockToast({ name:'Es ist noch hell draußen - komm zurück, wenn es dunkel wird.', thumb:'#8ec9ff' });
+      }
+    } },
   { id:'portal', name:'Uraltes Portal', x:-4, z:-23, radius:4.5, biome:'plains',
     getPrompt: () => '📖 Forscher-Journal öffnen',
     getHighlightMats: () => villagePortalCrystalMat ? [villagePortalCrystalMat] : [],
