@@ -6071,7 +6071,7 @@ try{
     // herausgeschoben. Musste auch schon VOR der Vergrößerung eine deutliche
     // Überlappung gehabt haben, war bei der kleineren Ausgangsgröße nur nie
     // aufgefallen/geprüft worden).
-    const g = new THREE.Group(); g.position.set(24.25,0,-6.05);
+    const g = new THREE.Group(); g.position.set(5.2,0,5.16);
     const walls = new THREE.Mesh(new THREE.BoxGeometry(3.2,2.0,3.0), wallMat); walls.position.y=1.0; g.add(walls);
     const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6,1.4,4), roofMat); roof.position.y=2.7; roof.rotation.y=Math.PI/4; g.add(roof);
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.7,1.3,0.1), doorMat); door.position.set(0,0.65,1.51); g.add(door);
@@ -6098,7 +6098,7 @@ try{
     const roofMat = new THREE.MeshStandardMaterial({ color:0x3a3a3a, roughness:0.9 });
     // Position von (-18,9) verschoben - gleicher Grund wie beim Haus der
     // Dorfältesten (siehe dortiger Kommentar).
-    const g = new THREE.Group(); g.position.set(-23.49,0,5.53);
+    const g = new THREE.Group(); g.position.set(-7,0,2);
     const walls = new THREE.Mesh(new THREE.BoxGeometry(3.4,1.8,2.8), wallMat); walls.position.y=0.9; g.add(walls);
     const roof = new THREE.Mesh(new THREE.BoxGeometry(3.6,0.3,3.0), roofMat); roof.position.y=1.95; g.add(roof);
     const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.26,1.2,6), wallMat); chimney.position.set(1.2,2.6,0); g.add(chimney);
@@ -6232,8 +6232,8 @@ try{
   // bei den Hügeln oben für die Koordinaten).
   // Beide Positionen nach der Vergrößerung (siehe buildCottage()) verschoben
   // - lagen sonst teils im Fußabdruck eines nahen Hügels.
-  buildCottage(2.09,-1.71,false);
-  buildCottage(-11.3,-19.4,false);
+  buildCottage(-3.88,-5.88,false);
+  buildCottage(2.96,-15.31,false);
   buildCottage(24.3,2.3,true);   // Ruine
   buildCottage(-22.4,-5.1,true); // Ruine
 
@@ -6251,7 +6251,7 @@ try{
     const mattressMat = flatMaterial('#e8ddc8', 0.8);
     const blanketMat = flatMaterial('#5a7ac9', 0.85);
     const pillowMat = flatMaterial('#f5f0e0', 0.7);
-    const g = new THREE.Group(); g.position.set(7.84, 0, -1.71); g.rotation.y = Math.PI/2; // um 90° gedreht, damit es parallel zur Seitenwand steht statt seitlich hineinzuragen
+    const g = new THREE.Group(); g.position.set(1.92, 0, -5.88); g.rotation.y = Math.PI/2; // um 90° gedreht, damit es parallel zur Seitenwand steht statt seitlich hineinzuragen
     const frame = new THREE.Mesh(new THREE.BoxGeometry(1.4,0.3,2.0), frameMat); frame.position.y=0.15; g.add(frame);
     const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.18,1.9), mattressMat); mattress.position.y=0.39; g.add(mattress);
     const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.32,0.1,1.1), blanketMat); blanket.position.set(0,0.53,0.35); g.add(blanket);
@@ -6262,10 +6262,12 @@ try{
     wieseGroup.add(g);
   })();
 
-  // Brunnen (Dorfmitte)
+  // Brunnen (Dorfmitte) - jetzt echtes Zentrum eines Dorfplatzes (siehe
+  // Bugreport "alles fühlt sich eng an" weiter unten bei den Wegen für die
+  // vollständige Begründung des neuen Dorf-Grundrisses).
   (function(){
     const stoneMat = new THREE.MeshStandardMaterial({ color:0x8a8578, roughness:0.9 });
-    const g = new THREE.Group(); g.position.set(2,0,7);
+    const g = new THREE.Group(); g.position.set(-0.87,0,0.5);
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.9,1.0,0.7,10), stoneMat); ring.position.y=0.35; g.add(ring);
     const water = new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,0.05,10), new THREE.MeshStandardMaterial({color:0x4a8ac9, roughness:0.3})); water.position.y=0.68; g.add(water);
     const postL = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.4,6), woodMat); postL.position.set(-0.7,1.3,0); g.add(postL);
@@ -6277,6 +6279,42 @@ try{
     registerWorldObstacle(g, { cameraOccluder:false }); // Fußabdruck jetzt automatisch aus der Bounding Box abgeleitet
     wieseGroup.add(g);
   })();
+
+  // Dorfwege - verbinden den Platz (Brunnen) sichtbar mit jedem der vier
+  // Kernhäuser, statt dass das Dorf nur aus verstreuten Gebäuden auf Wiese
+  // besteht (Bugreport: "fühlt sich eng/wirr an" - ein erkennbarer
+  // Grundriss mit Platz+Wegen behebt das strukturell, nicht nur durch mehr
+  // Abstand zwischen den Gebäuden). Rein dekorativ (keine Kollision) - Wege
+  // sollen begehbar bleiben, nicht selbst zu Hindernissen werden.
+  const dirtPathTex = makeTex(32, (ctx,s) => {
+    px(ctx,0,0,s,s,'#a5895c');
+    const r = rand(17);
+    for(let i=0;i<50;i++) px(ctx, r()*s, r()*s, 2,2, r()>0.5?'rgba(0,0,0,0.15)':'rgba(255,255,255,0.15)');
+  });
+  dirtPathTex.wrapS = dirtPathTex.wrapT = THREE.RepeatWrapping;
+  function buildDirtPath(x1,z1,x2,z2,width){
+    const dx = x2-x1, dz = z2-z1;
+    const len = Math.hypot(dx,dz);
+    const angle = Math.atan2(dx,dz);
+    const tex = dirtPathTex.clone();
+    tex.needsUpdate = true;
+    tex.repeat.set(width/1.5, len/1.5); // Kachel-Dichte an die tatsächliche Weglänge anpassen, statt gestreckt zu wirken
+    const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:1 });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, len), mat);
+    mesh.rotation.x = -Math.PI/2; // flach auf den Boden legen
+    mesh.rotation.z = -angle;
+    mesh.position.set((x1+x2)/2, 0.03, (z1+z2)/2); // knapp über dem Boden, verhindert Z-Fighting mit der Wiesen-Textur
+    mesh.receiveShadow = true;
+    wieseGroup.add(mesh);
+    return mesh;
+  }
+  const villagePlazaCenter = { x:-0.87, z:0.5 };
+  [
+    { x:5.2, z:5.16 },   // zum Haus der Dorfältesten
+    { x:-7, z:2 },       // zur Schmiede
+    { x:-3.88, z:-5.88 }, // zur ersten Hütte
+    { x:2.96, z:-15.31 } // zur zweiten Hütte
+  ].forEach(dest => buildDirtPath(villagePlazaCenter.x, villagePlazaCenter.z, dest.x, dest.z, 1.6));
 
   // Marktstand
   (function(){
@@ -6387,8 +6425,8 @@ try{
   // Beide Positionen erneut angepasst, nachdem Haus/Schmiede selbst
   // verschoben wurden (siehe dortige Kommentare) - sonst wären die NPCs
   // nicht mehr "nahe ihrem Haus", sondern weit davon entfernt gewesen.
-  villagerFigures.push(buildVillagerFigure(19.37,-3.35,0x5a7ac9,1,'#e0d8c8'));  // Dorfälteste (nahe ihrem Haus) - graues Haar
-  villagerFigures.push(buildVillagerFigure(-17.92,2.76,0x2a2a2a,1,'#2a231c')); // Schmied (nahe der Schmiede) - dunkles Haar
+  villagerFigures.push(buildVillagerFigure(3.13,-0.04,0x5a7ac9,1,'#e0d8c8'));  // Dorfälteste (nahe ihrem Haus und dem Dorfplatz) - graues Haar
+  villagerFigures.push(buildVillagerFigure(-1.88,4.16,0x2a2a2a,1,'#2a231c')); // Schmied (nahe der Schmiede und dem Dorfplatz) - dunkles Haar
   villagerFigures.push(buildVillagerFigure(-5,-8,0x6a9c4a,1,'#8a5a2a'));  // Bäuerin (nahe dem Garten) - braunes Haar
   villagerFigures.push(buildVillagerFigure(4,9,0xc97a4a,0.72,'#e0b84a')); // Kind (nahe dem Brunnen) - kleiner, blondes Haar
 
@@ -8529,7 +8567,7 @@ let lastExploreT = null;
 // nächstgelegenen Landmarke und zeigt bei Bedarf einen Hinweis/Glühen an.
 // =====================================================================
 const LANDMARK_DEFS = [
-  { id:'bed', name:'Bett', x:7.84, z:-1.71, radius:2.2, biome:'plains', // Position folgt dem tatsächlichen Bett (siehe dortiger Kommentar zum Verschieben)
+  { id:'bed', name:'Bett', x:1.92, z:-5.88, radius:2.2, biome:'plains', // Position folgt dem tatsächlichen Bett (siehe dortiger Kommentar zum Verschieben)
     // sunHeight<0.05 - nachts (und in der Dämmerung kurz davor/danach)
     // nutzbar, siehe updateDayNightCycle() weiter oben. Tagsüber nur ein
     // Hinweistext, keine Wirkung - "schlafen" soll sich nicht wie ein
@@ -8548,11 +8586,11 @@ const LANDMARK_DEFS = [
     getPrompt: () => '📖 Forscher-Journal öffnen',
     getHighlightMats: () => villagePortalCrystalMat ? [villagePortalCrystalMat] : [],
     onInteract: () => { exitExploreMode(); showScreen('journal-screen'); renderJournalScreen(); } },
-  { id:'elder_house', name:'Haus der Dorfältesten', x:24.25, z:-6.05, radius:3.2, biome:'plains', // Position folgt dem tatsächlichen Haus (siehe dortiger Kommentar zum Verschieben)
+  { id:'elder_house', name:'Haus der Dorfältesten', x:5.2, z:5.16, radius:3.2, biome:'plains', // Position folgt dem tatsächlichen Haus (siehe dortiger Kommentar zum Verschieben)
     getPrompt: () => '🧙 Mit der Ältesten sprechen',
     getHighlightMats: () => villageElderLanternMat ? [villageElderLanternMat] : [],
     onInteract: () => { exitExploreMode(); showScreen('journal-screen'); renderJournalScreen(); } },
-  { id:'blacksmith', name:'Schmiede', x:-23.49, z:5.53, radius:3.2, biome:'plains', // Position folgt der tatsächlichen Schmiede (siehe dortiger Kommentar zum Verschieben)
+  { id:'blacksmith', name:'Schmiede', x:-7, z:2, radius:3.2, biome:'plains', // Position folgt der tatsächlichen Schmiede (siehe dortiger Kommentar zum Verschieben)
     getPrompt: () => '🔨 Werkbank öffnen',
     getHighlightMats: () => [],
     onInteract: () => { exitExploreMode(); showScreen('craft-screen'); renderCraftScreen(); } },
