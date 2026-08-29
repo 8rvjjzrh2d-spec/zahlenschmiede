@@ -6052,33 +6052,61 @@ try{
   })();
 
   // Haus der Dorfältesten - Hütte mit Satteldach, Tür und schwingender Laterne
+  // Bugreport: Häuser wirkten zu klein im Verhältnis zum Charakter (~4
+  // Einheiten hoch) - dieses Haus hatte bisher GAR KEINE Skalierung (nackte
+  // Rohmaße), Wandhöhe also nur 2.0 - deutlich NIEDRIGER als der Charakter
+  // selbst. Jetzt mit 2.0 skaliert (Wandhöhe 4.0, Dachfirst-Gesamthöhe ~6.8 -
+  // spürbar größer als der Charakter). Bewusst nicht noch größer (z.B. 3.0):
+  // eine erste, aggressivere Skalierung erforderte so massive Verschiebungen
+  // weg von den zahlreichen Hügeln in der Nähe (bis zu 17 Einheiten!), dass
+  // das Dorf komplett umgestaltet worden wäre - 2.0 braucht nur kleine,
+  // lokale Korrekturen (siehe die neuen Positionen unten).
   (function(){
     const wallMat = plankWallMaterial('#d9c9a3', 0.9);
     const roofMat = new THREE.MeshStandardMaterial({ color:0x8a4a3a, roughness:0.85 });
     const doorMat = flatMaterial('#5a3a22', 0.8);
-    const g = new THREE.Group(); g.position.set(15,0,-12);
+    // Position von (15,-12) verschoben (Bugreport: nach der Vergrößerung -
+    // siehe Skalierung unten - lag das Haus deutlich im Fußabdruck eines
+    // nahen Hügels; per Spiralsuche mit dem echten Wand-Fußabdruck radial
+    // herausgeschoben. Musste auch schon VOR der Vergrößerung eine deutliche
+    // Überlappung gehabt haben, war bei der kleineren Ausgangsgröße nur nie
+    // aufgefallen/geprüft worden).
+    const g = new THREE.Group(); g.position.set(24.25,0,-6.05);
     const walls = new THREE.Mesh(new THREE.BoxGeometry(3.2,2.0,3.0), wallMat); walls.position.y=1.0; g.add(walls);
     const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6,1.4,4), roofMat); roof.position.y=2.7; roof.rotation.y=Math.PI/4; g.add(roof);
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.7,1.3,0.1), doorMat); door.position.set(0,0.65,1.51); g.add(door);
     villageElderLanternMat = new THREE.MeshStandardMaterial({ color:0xffe08a, emissive:0xffb84a, emissiveIntensity:0.6, roughness:0.5 });
     villageElderLantern = new THREE.Mesh(new THREE.SphereGeometry(0.13,8,8), villageElderLanternMat);
     villageElderLantern.position.set(0.9,1.5,1.6); g.add(villageElderLantern);
-    registerWorldObstacle(g);
+    g.scale.setScalar(2.0);
+    // Fußabdruck bewusst nur von den WÄNDEN abgeleitet, nicht automatisch
+    // von der gesamten Bounding Box - das Kegeldach (Radius 2.6) ist breiter
+    // als die Wände (Halbbreite 1.6) und würde sonst einen unnötig großen
+    // Kollisionsbereich erzeugen (derselbe Fund wie bei buildCottage(), siehe
+    // dort für die ausführliche Begründung).
+    registerWorldObstacle(g, { footprint:{ type:'box', halfWidth: 1.6*2.0+0.3, halfDepth: 1.5*2.0+0.3, offsetX:0, offsetZ:0 } });
     wieseGroup.add(g);
   })();
 
   // Schmiede - Werkstatt mit Amboss, Esse und rauchendem Schornstein
+  // Gleicher Bugreport wie beim Haus der Dorfältesten - bisher ganz ohne
+  // Skalierung (Wandhöhe nur 1.8, weniger als halb so hoch wie der
+  // Charakter). Jetzt ebenfalls mit 2.0 skaliert (siehe Kommentar beim Haus
+  // der Dorfältesten oben zur Begründung, warum nicht noch größer).
   (function(){
     const wallMat = plankWallMaterial('#7a7268', 0.95);
     const roofMat = new THREE.MeshStandardMaterial({ color:0x3a3a3a, roughness:0.9 });
-    const g = new THREE.Group(); g.position.set(-18,0,9);
+    // Position von (-18,9) verschoben - gleicher Grund wie beim Haus der
+    // Dorfältesten (siehe dortiger Kommentar).
+    const g = new THREE.Group(); g.position.set(-23.49,0,5.53);
     const walls = new THREE.Mesh(new THREE.BoxGeometry(3.4,1.8,2.8), wallMat); walls.position.y=0.9; g.add(walls);
     const roof = new THREE.Mesh(new THREE.BoxGeometry(3.6,0.3,3.0), roofMat); roof.position.y=1.95; g.add(roof);
     const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.26,1.2,6), wallMat); chimney.position.set(1.2,2.6,0); g.add(chimney);
     const anvilMat = flatMaterial('#2a2a2a', 0.6);
     const anvil = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.5,0.35), anvilMat); anvil.position.set(0,0.25,1.8); g.add(anvil);
-    blacksmithChimneyTop = new THREE.Vector3(g.position.x+1.2, 3.2, g.position.z);
-    registerWorldObstacle(g); // Fußabdruck jetzt automatisch aus der Bounding Box abgeleitet (deckt auch den Schornstein mit ab)
+    g.scale.setScalar(2.0);
+    blacksmithChimneyTop = new THREE.Vector3(g.position.x+1.2*2.0, 3.2*2.0, g.position.z);
+    registerWorldObstacle(g); // Fußabdruck weiterhin automatisch aus der Bounding Box abgeleitet (deckt auch den Schornstein mit ab) - Dach/Anbauten hier nicht wesentlich breiter als die Wände, siehe Kommentar bei der ursprünglichen Registrierung
     wieseGroup.add(g);
   })();
 
@@ -6179,15 +6207,22 @@ try{
       const moss = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.5,0.15), mossMat); moss.position.set(-0.6,wallH*0.5,1.21); g.add(moss); // Moosfleck an der Wand
       const rubble = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.3,0.5), crateMat); rubble.position.set(0.9,0.15,1.0); rubble.rotation.y=0.5; g.add(rubble);
     }
-    g.scale.setScalar(2.2); // Charakter ist ~4 Einheiten hoch - Gebäude waren zu klein dimensioniert
+    // 2.5 statt vorher 2.2 (Bugreport: Häuser wirkten im Verhältnis zum
+    // Charakter (~4 Einheiten hoch) immer noch zu klein - bei 2.2 war die
+    // Wandhöhe mit 1.8*2.2=3.96 fast exakt charaktergroß, ohne jede
+    // Großzügigkeit fürs Dach obendrauf). Bewusst nicht aggressiver skaliert
+    // (eine erste Version mit 3.2 wurde wieder verworfen) - die Häuser stehen
+    // dicht an mehreren Hügeln, eine deutlich größere Fläche hätte massive,
+    // dorfweite Verschiebungen erzwungen statt kleiner lokaler Korrekturen.
+    g.scale.setScalar(2.5);
     // Fußabdruck BEWUSST nur von den Wänden ableiten, nicht automatisch von
     // der gesamten Bounding Box: das Kegeldach (Radius 2.1) ist breiter als
     // die Wände (Halbbreite 1.3) und würde sonst einen Kollisionsbereich
     // erzeugen, der fast doppelt so groß wie das Haus selbst ist (Bug: dadurch
     // konnte ein verschobenes Haus sogar den Startpunkt (0,0) blockieren, der
     // Charakter blieb an Ort und Stelle stehen). Wand-Maße: BoxGeometry(2.6,
-    // wallH,2.4), also Halbbreite 1.3 / Halbtiefe 1.2, mal Skalierung 2.2.
-    registerWorldObstacle(g, { footprint:{ type:'box', halfWidth: 1.3*2.2+0.3, halfDepth: 1.2*2.2+0.3, offsetX:0, offsetZ:0 } });
+    // wallH,2.4), also Halbbreite 1.3 / Halbtiefe 1.2, mal Skalierung 2.5.
+    registerWorldObstacle(g, { footprint:{ type:'box', halfWidth: 1.3*2.5+0.3, halfDepth: 1.2*2.5+0.3, offsetX:0, offsetZ:0 } });
     wieseGroup.add(g);
     return g;
   }
@@ -6195,23 +6230,28 @@ try{
   // überschneidet (vorher standen alle vier teils im Hügel - programmatisch
   // gegen die bekannten Hügel-Mittelpunkte/-Radien geprüft, siehe Kommentar
   // bei den Hügeln oben für die Koordinaten).
-  buildCottage(6.8,-1,false);
-  buildCottage(-13.8,-19.4,false);
+  // Beide Positionen nach der Vergrößerung (siehe buildCottage()) verschoben
+  // - lagen sonst teils im Fußabdruck eines nahen Hügels.
+  buildCottage(2.09,-1.71,false);
+  buildCottage(-11.3,-19.4,false);
   buildCottage(24.3,2.3,true);   // Ruine
   buildCottage(-22.4,-5.1,true); // Ruine
 
-  // Bett vor der ersten Hütte - Interaktion siehe LANDMARK_DEFS ('bed'):
-  // nachts schlafen, um bis zum nächsten Morgen vorzuspulen (Tag/Nacht-
-  // Zyklus, siehe updateDayNightCycle/sleepUntilMorning weiter oben). Die
-  // Hütten selbst sind nur massive Außenhüllen ohne begehbares Inneres
-  // (wie alle Gebäude hier) - das Bett steht daher bewusst direkt vor der
-  // Tür, nicht "drinnen", genau wie z.B. der Amboss vor der Schmiede.
+  // Bett an der Seite der ersten Hütte - Interaktion siehe LANDMARK_DEFS
+  // ('bed'): nachts schlafen, um bis zum nächsten Morgen vorzuspulen (Tag/
+  // Nacht-Zyklus, siehe updateDayNightCycle/sleepUntilMorning weiter oben).
+  // Die Hütten selbst sind nur massive Außenhüllen ohne begehbares Inneres
+  // (wie alle Gebäude hier) - das Bett steht daher bewusst außen, genau wie
+  // z.B. der Amboss vor der Schmiede. WICHTIG: bewusst an der SEITENWAND,
+  // NICHT vor der Tür (Bugreport: stand ursprünglich direkt davor und
+  // versperrte optisch den Eingang) - die Tür liegt auf der +Z-Seite des
+  // Hauses, das Bett steht stattdessen entlang der +X-Seitenwand.
   (function(){
     const frameMat = flatMaterial('#6b4423', 0.85);
     const mattressMat = flatMaterial('#e8ddc8', 0.8);
     const blanketMat = flatMaterial('#5a7ac9', 0.85);
     const pillowMat = flatMaterial('#f5f0e0', 0.7);
-    const g = new THREE.Group(); g.position.set(6.8, 0, 3.4);
+    const g = new THREE.Group(); g.position.set(7.84, 0, -1.71); g.rotation.y = Math.PI/2; // um 90° gedreht, damit es parallel zur Seitenwand steht statt seitlich hineinzuragen
     const frame = new THREE.Mesh(new THREE.BoxGeometry(1.4,0.3,2.0), frameMat); frame.position.y=0.15; g.add(frame);
     const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.18,1.9), mattressMat); mattress.position.y=0.39; g.add(mattress);
     const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.32,0.1,1.1), blanketMat); blanket.position.set(0,0.53,0.35); g.add(blanket);
@@ -6344,8 +6384,11 @@ try{
   // Oberkörper ragte heraus) - per Spiralsuche (isWorldPositionFree) radial
   // aus dem jeweiligen Hügel heraus verschoben, auf demselben Weg wie schon
   // die 4 Hütten weiter oben im "Automatischer Kollisions-Fußabdruck"-Fund.
-  villagerFigures.push(buildVillagerFigure(7.24,-5.53,0x5a7ac9,1,'#e0d8c8'));  // Dorfälteste (nahe ihrem Haus) - graues Haar
-  villagerFigures.push(buildVillagerFigure(-12.23,2.62,0x2a2a2a,1,'#2a231c')); // Schmied (nahe der Schmiede) - dunkles Haar
+  // Beide Positionen erneut angepasst, nachdem Haus/Schmiede selbst
+  // verschoben wurden (siehe dortige Kommentare) - sonst wären die NPCs
+  // nicht mehr "nahe ihrem Haus", sondern weit davon entfernt gewesen.
+  villagerFigures.push(buildVillagerFigure(19.37,-3.35,0x5a7ac9,1,'#e0d8c8'));  // Dorfälteste (nahe ihrem Haus) - graues Haar
+  villagerFigures.push(buildVillagerFigure(-17.92,2.76,0x2a2a2a,1,'#2a231c')); // Schmied (nahe der Schmiede) - dunkles Haar
   villagerFigures.push(buildVillagerFigure(-5,-8,0x6a9c4a,1,'#8a5a2a'));  // Bäuerin (nahe dem Garten) - braunes Haar
   villagerFigures.push(buildVillagerFigure(4,9,0xc97a4a,0.72,'#e0b84a')); // Kind (nahe dem Brunnen) - kleiner, blondes Haar
 
@@ -8486,7 +8529,7 @@ let lastExploreT = null;
 // nächstgelegenen Landmarke und zeigt bei Bedarf einen Hinweis/Glühen an.
 // =====================================================================
 const LANDMARK_DEFS = [
-  { id:'bed', name:'Bett', x:6.8, z:3.4, radius:2.2, biome:'plains',
+  { id:'bed', name:'Bett', x:7.84, z:-1.71, radius:2.2, biome:'plains', // Position folgt dem tatsächlichen Bett (siehe dortiger Kommentar zum Verschieben)
     // sunHeight<0.05 - nachts (und in der Dämmerung kurz davor/danach)
     // nutzbar, siehe updateDayNightCycle() weiter oben. Tagsüber nur ein
     // Hinweistext, keine Wirkung - "schlafen" soll sich nicht wie ein
@@ -8505,11 +8548,11 @@ const LANDMARK_DEFS = [
     getPrompt: () => '📖 Forscher-Journal öffnen',
     getHighlightMats: () => villagePortalCrystalMat ? [villagePortalCrystalMat] : [],
     onInteract: () => { exitExploreMode(); showScreen('journal-screen'); renderJournalScreen(); } },
-  { id:'elder_house', name:'Haus der Dorfältesten', x:15, z:-12, radius:3.2, biome:'plains',
+  { id:'elder_house', name:'Haus der Dorfältesten', x:24.25, z:-6.05, radius:3.2, biome:'plains', // Position folgt dem tatsächlichen Haus (siehe dortiger Kommentar zum Verschieben)
     getPrompt: () => '🧙 Mit der Ältesten sprechen',
     getHighlightMats: () => villageElderLanternMat ? [villageElderLanternMat] : [],
     onInteract: () => { exitExploreMode(); showScreen('journal-screen'); renderJournalScreen(); } },
-  { id:'blacksmith', name:'Schmiede', x:-18, z:9, radius:3.2, biome:'plains',
+  { id:'blacksmith', name:'Schmiede', x:-23.49, z:5.53, radius:3.2, biome:'plains', // Position folgt der tatsächlichen Schmiede (siehe dortiger Kommentar zum Verschieben)
     getPrompt: () => '🔨 Werkbank öffnen',
     getHighlightMats: () => [],
     onInteract: () => { exitExploreMode(); showScreen('craft-screen'); renderCraftScreen(); } },
