@@ -10164,15 +10164,10 @@ document.getElementById('abort-btn').addEventListener('click', () => {
 // Reihenfolge, in der neue Vokabellisten reinkommen - nicht zwingend die
 // Kalenderwoche). Der Tab "Diese Woche"/die Probeprüfung nutzen NUR die
 // Wörter mit week===CURRENT_VOCAB_WEEK, "Meine Wörter" alle anderen.
-// CURRENT_VOCAB_WEEK und VOCAB_TEST_DATE müssen bei jeder neuen Wochenliste
-// zusammen mit den neuen Einträgen aktualisiert werden, sonst zeigen "Diese
-// Woche"/Probeprüfung/"Heute" weiterhin die alte Woche bzw. ein falsches
-// Prüfungsdatum an. VOCAB_TEST_DATE bewusst `null` lassbar (statt geraten) -
-// die UI zeigt dann "noch nicht eingetragen" statt eines erfundenen Datums;
-// bis dahin rechnet die Heute-Gewichtung mit einem neutralen Standardwert
-// (siehe vocabWeekShareToday()).
+// CURRENT_VOCAB_WEEK muss bei jeder neuen Wochenliste zusammen mit den
+// neuen Einträgen aktualisiert werden, sonst zeigen "Diese Woche"/
+// Probeprüfung/"Heute" weiterhin die alte Woche an.
 const CURRENT_VOCAB_WEEK = 2;
-const VOCAB_TEST_DATE = null; // z.B. '2026-09-05' - vom Nutzer pro Woche mitteilen
 const VOCAB_WORDS = [
   { id:'sense', en:'sense', de:['Sinn'], week:1 },
   { id:'see', en:'see', de:['sehen'], week:1 },
@@ -10251,6 +10246,17 @@ function formatVocabDate(dateStr){
   if(isNaN(d)) return dateStr;
   return `${VOCAB_WEEKDAYS[d.getDay()]}, ${dateStr}`;
 }
+// Die Prüfung ist laut Nutzer immer am nächsten Donnerstag - wird bei jedem
+// Aufruf frisch aus dem heutigen Datum berechnet statt als Konstante gepflegt
+// zu werden müssen (kein Pflegeaufwand mehr pro Woche, kein Risiko eines
+// vergessenen/veralteten Datums). Ist heute selbst Donnerstag, gilt heute
+// als Prüfungstag (diff 0), nicht erst die Woche danach.
+function getVocabTestDate(){
+  const d = new Date();
+  const diff = (4 - d.getDay() + 7) % 7; // 4 = Donnerstag
+  d.setDate(d.getDate() + diff);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 // Einfaches, nachvollziehbares Intervall-System (kein volles SM-2): richtig
 // beantwortet verdoppelt das Intervall (Deckel 60 Tage), falsch beantwortet
 // setzt es hart auf 1 Tag zurück - "ein vermeintlich sicheres Wort erscheint
@@ -10272,10 +10278,8 @@ function srsUrgency(wordId){
 }
 // Anteil, den Wochenwörter im "Heute"-Mischpool bekommen - steigt, je näher
 // die Prüfung rückt (Punkt 2: "Je näher die Prüfung rückt, desto stärker...").
-// Ohne bekanntes VOCAB_TEST_DATE ein neutraler Standardwert statt Raten.
 function vocabWeekShareToday(){
-  if(!VOCAB_TEST_DATE) return 0.4;
-  const daysLeft = daysBetween(todayStr(), VOCAB_TEST_DATE);
+  const daysLeft = daysBetween(todayStr(), getVocabTestDate());
   if(daysLeft <= 1) return 0.85;
   if(daysLeft <= 3) return 0.7;
   if(daysLeft <= 6) return 0.55;
@@ -10383,7 +10387,7 @@ function pickExerciseType(word, mode){
   }
   let spellingChance = 0.2 + (p.mastery-35)/100;
   if(mode === 'week' || mode === 'today'){
-    const daysLeft = VOCAB_TEST_DATE ? daysBetween(todayStr(), VOCAB_TEST_DATE) : 10;
+    const daysLeft = daysBetween(todayStr(), getVocabTestDate());
     if(daysLeft <= 3) spellingChance += 0.2;
   }
   spellingChance = Math.min(0.85, spellingChance);
@@ -10558,7 +10562,7 @@ function renderVocabTodayTab(){
   const weekPool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
   const minePool = VOCAB_WORDS.filter(w => w.week !== CURRENT_VOCAB_WEEK);
   const dueCount = minePool.filter(w => daysBetween(getVocabProgress(w.id).nextReview, todayStr()) >= 0).length;
-  const testInfo = VOCAB_TEST_DATE ? formatVocabDate(VOCAB_TEST_DATE) : 'noch nicht eingetragen';
+  const testInfo = formatVocabDate(getVocabTestDate());
   document.getElementById('vocab-today-summary').innerHTML =
     `<strong>📅 Heute üben</strong><br>
      <span class="journal-sub">${weekPool.length} Wörter aus dieser Woche, ${dueCount} alte Wörter fällig</span><br>
@@ -10567,7 +10571,7 @@ function renderVocabTodayTab(){
 function renderVocabWeekTab(){
   const pool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
   const counts = vocabStatusCounts(pool);
-  const testInfo = VOCAB_TEST_DATE ? formatVocabDate(VOCAB_TEST_DATE) : 'noch nicht eingetragen';
+  const testInfo = formatVocabDate(getVocabTestDate());
   document.getElementById('vocab-week-summary').innerHTML =
     `<strong>Diese Woche - ${pool.length} Wörter</strong><br>
      <span class="journal-sub">Prüfung: ${testInfo}</span><br><br>
