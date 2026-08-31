@@ -562,8 +562,16 @@
       <span style="font-size:12px; font-weight:800;">🔤 Englisch-Vokabeln</span>
       <button class="ghost-btn" id="back-to-hub-from-vocab" style="width:auto; padding:4px 10px;">← Zurück</button>
     </div>
-    <div class="practice-layout">
+    <div id="vocab-mode-select" style="text-align:center; padding: 22px 14px;">
+      <div class="pixel-label" style="margin-bottom:16px;">WAS MÖCHTEST DU ÜBEN?</div>
+      <button class="primary-btn" id="vocab-mode-exam-btn" style="max-width:340px; margin:0 auto;">🎯 PRÜFUNGSTRAINING</button>
+      <div class="account-sub" id="vocab-exam-week-hint" style="margin:6px 0 20px;">Nur die Wörter für die nächste Prüfung</div>
+      <button class="ghost-btn" id="vocab-mode-all-btn" style="max-width:340px; margin:0 auto; border:2px solid var(--ink); border-radius:8px;">🔀 ALLE WÖRTER</button>
+      <div class="account-sub" style="margin-top:6px;">Gemischtes Wiederholen aller bisherigen Wörter</div>
+    </div>
+    <div class="practice-layout hidden" id="vocab-quiz-area">
       <div class="practice-viewer-col">
+        <div class="pixel-label" id="vocab-mode-indicator">🔀 Alle Wörter</div>
         <div class="pixel-label">RUNDE (10 WÖRTER)</div>
         <div class="progress-hint-label" id="vocab-round-label">0/10 beantwortet</div>
         <div class="progress-hint-bar-track"><div class="progress-hint-bar-fill" id="vocab-round-fill" style="width:0%;"></div></div>
@@ -8567,7 +8575,7 @@ document.getElementById('nav-inventory').addEventListener('click', () => openScr
 document.getElementById('nav-customize').addEventListener('click', () => openScreenAsFullscreenPopup('customize-screen', renderCustomizeScreen));
 document.getElementById('nav-pets').addEventListener('click', () => openScreenAsFullscreenPopup('pet-menu-screen', renderPetMenuScreen));
 document.getElementById('nav-journal').addEventListener('click', () => openScreenAsFullscreenPopup('journal-screen', renderJournalScreen));
-document.getElementById('nav-vocab').addEventListener('click', () => openScreenAsFullscreenPopup('vocab-screen', initVocabSession));
+document.getElementById('nav-vocab').addEventListener('click', () => openScreenAsFullscreenPopup('vocab-screen', showVocabModeSelect));
 // (nav-world entfernt - redundant mit Tagebuch, das dieselbe Welt-Auswahl bereits anzeigt)
 
 // Popup-Overlay-System für die Vollbildansicht: öffnet dieselben Bildschirme
@@ -10048,39 +10056,48 @@ document.getElementById('abort-btn').addEventListener('click', () => {
 // updateMastery() für Mathe. Beliebig oft wiederholbar (keine feste Länge),
 // schwächere Wörter werden per Gewichtung häufiger gefragt (siehe pickVocabWord).
 // =====================================================================
+// Jedes Wort trägt jetzt eine "week" (Schul-Wochennummer, entspricht der
+// Reihenfolge, in der neue Vokabellisten reinkommen - nicht zwingend die
+// Kalenderwoche). Grund: zwei Übungsmodi (siehe vocab-mode-select unten) -
+// "Prüfungstraining" nutzt NUR die Wörter mit week===CURRENT_VOCAB_WEEK
+// (der Stoff der kommenden Prüfung), "Alle Wörter" mischt wie bisher über
+// die komplette Liste. CURRENT_VOCAB_WEEK muss bei jeder neuen Wochenliste
+// zusammen mit den neuen Einträgen hochgezählt werden, sonst zeigt das
+// Prüfungstraining weiterhin die alte(n) Woche(n) an.
+const CURRENT_VOCAB_WEEK = 2;
 const VOCAB_WORDS = [
-  { id:'sense', en:'sense', de:['Sinn'] },
-  { id:'see', en:'see', de:['sehen'] },
-  { id:'hear', en:'hear', de:['hören'] },
-  { id:'smell', en:'smell', de:['riechen'] },
-  { id:'taste', en:'taste', de:['schmecken'] },
-  { id:'touch', en:'touch', de:['berühren'] },
-  { id:'feel', en:'feel', de:['fühlen','spüren','sich anfühlen'] },
-  { id:'fair', en:'fair', de:['Jahrmarkt','Chilbi'] },
-  { id:'loud_noise', en:'loud noise', de:['lautes Geräusch','Lärm'] },
-  { id:'mild_or_hot_curry', en:'mild or hot curry', de:['mildes oder scharfes Curry'] },
+  { id:'sense', en:'sense', de:['Sinn'], week:1 },
+  { id:'see', en:'see', de:['sehen'], week:1 },
+  { id:'hear', en:'hear', de:['hören'], week:1 },
+  { id:'smell', en:'smell', de:['riechen'], week:1 },
+  { id:'taste', en:'taste', de:['schmecken'], week:1 },
+  { id:'touch', en:'touch', de:['berühren'], week:1 },
+  { id:'feel', en:'feel', de:['fühlen','spüren','sich anfühlen'], week:1 },
+  { id:'fair', en:'fair', de:['Jahrmarkt','Chilbi'], week:1 },
+  { id:'loud_noise', en:'loud noise', de:['lautes Geräusch','Lärm'], week:1 },
+  { id:'mild_or_hot_curry', en:'mild or hot curry', de:['mildes oder scharfes Curry'], week:1 },
   // Class vocabulary Unit 1, Woche 2 (Testumfang für die nächste Prüfung) -
   // Fortsetzung der Liste oben, gleiche Quelle (Schulbuch-Vokabelliste).
-  { id:'candyfloss', en:'candyfloss', de:['Zuckerwatte'] },
-  { id:'toffee', en:'toffee', de:['Caramelbonbon'] },
-  { id:'sticky_candy', en:'sticky candy', de:['klebrige Süssigkeiten','Bonbons'] },
-  { id:'food_test', en:'food test', de:['Lebensmitteltest'] },
-  { id:'soft_or_hard_cheese', en:'soft or hard cheese', de:['weicher oder harter Käse'] },
-  { id:'bite', en:'bite', de:['beissen'] },
-  { id:'crack', en:'crack', de:['krachen'] },
-  { id:'sweet_or_sour_apples', en:'sweet or sour apples', de:['süsse oder saure Äpfel'] },
-  { id:'aromatic', en:'aromatic', de:['aromatisch','würzig'] },
-  { id:'bitter', en:'bitter', de:['bitter'] },
-  { id:'fruity', en:'fruity', de:['fruchtig'] },
-  { id:'fresh_vegetables', en:'fresh vegetables', de:['frisches Gemüse'] },
-  { id:'a_piece_of_cheese', en:'a piece of cheese', de:['ein Stück Käse'] },
-  { id:'i_like_because', en:'I like ... because ...', de:['Ich mag ..., weil ...'] },
-  { id:'i_dont_like_because', en:"I don't like ... because ...", de:['Ich mag ... nicht, weil ...'] },
-  { id:'it_looks', en:'It looks ...', de:['Es sieht ... aus.'] },
-  { id:'it_sounds', en:'It sounds ...', de:['Es tönt ...'] },
-  { id:'it_tastes_too', en:'It tastes too ...', de:['Es schmeckt zu ...'] },
-  { id:'favourite_product', en:'favourite product', de:['Lieblingsprodukt'] },
-  { id:'result', en:'result', de:['Resultat','Ergebnis'] }
+  { id:'candyfloss', en:'candyfloss', de:['Zuckerwatte'], week:2 },
+  { id:'toffee', en:'toffee', de:['Caramelbonbon'], week:2 },
+  { id:'sticky_candy', en:'sticky candy', de:['klebrige Süssigkeiten','Bonbons'], week:2 },
+  { id:'food_test', en:'food test', de:['Lebensmitteltest'], week:2 },
+  { id:'soft_or_hard_cheese', en:'soft or hard cheese', de:['weicher oder harter Käse'], week:2 },
+  { id:'bite', en:'bite', de:['beissen'], week:2 },
+  { id:'crack', en:'crack', de:['krachen'], week:2 },
+  { id:'sweet_or_sour_apples', en:'sweet or sour apples', de:['süsse oder saure Äpfel'], week:2 },
+  { id:'aromatic', en:'aromatic', de:['aromatisch','würzig'], week:2 },
+  { id:'bitter', en:'bitter', de:['bitter'], week:2 },
+  { id:'fruity', en:'fruity', de:['fruchtig'], week:2 },
+  { id:'fresh_vegetables', en:'fresh vegetables', de:['frisches Gemüse'], week:2 },
+  { id:'a_piece_of_cheese', en:'a piece of cheese', de:['ein Stück Käse'], week:2 },
+  { id:'i_like_because', en:'I like ... because ...', de:['Ich mag ..., weil ...'], week:2 },
+  { id:'i_dont_like_because', en:"I don't like ... because ...", de:['Ich mag ... nicht, weil ...'], week:2 },
+  { id:'it_looks', en:'It looks ...', de:['Es sieht ... aus.'], week:2 },
+  { id:'it_sounds', en:'It sounds ...', de:['Es tönt ...'], week:2 },
+  { id:'it_tastes_too', en:'It tastes too ...', de:['Es schmeckt zu ...'], week:2 },
+  { id:'favourite_product', en:'favourite product', de:['Lieblingsprodukt'], week:2 },
+  { id:'result', en:'result', de:['Resultat','Ergebnis'], week:2 }
 ];
 function normalizeVocabAnswer(str){
   return String(str||'').trim().toLowerCase().replace(/\s+/g,' ').replace(/[.,!?]+$/,'');
@@ -10102,14 +10119,27 @@ function vocabWeight(wordId){
   const mastery = profile.vocabMastery[wordId] === undefined ? 50 : profile.vocabMastery[wordId];
   return Math.max(5, 100 - mastery);
 }
+// Zwei Übungsmodi (vocabSession.mode, siehe vocab-mode-select): 'exam'
+// grenzt den Wortpool auf die aktuelle Prüfungswoche ein (CURRENT_VOCAB_WEEK),
+// 'all' (Standard/Fallback) nutzt wie bisher die komplette Liste. Fällt auf
+// die volle Liste zurück, falls die aktuelle Woche (noch) keine Wörter hat -
+// sollte in der Praxis nie eintreten, ist aber ein günstiges Sicherheitsnetz.
+function currentVocabPool(){
+  if(vocabSession && vocabSession.mode === 'exam'){
+    const pool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
+    if(pool.length) return pool;
+  }
+  return VOCAB_WORDS;
+}
 function pickVocabWord(excludeId){
+  const pool = currentVocabPool();
   let word;
   do {
-    const totalWeight = VOCAB_WORDS.reduce((sum,w) => sum + vocabWeight(w.id), 0);
+    const totalWeight = pool.reduce((sum,w) => sum + vocabWeight(w.id), 0);
     let r = Math.random() * totalWeight;
-    word = VOCAB_WORDS[VOCAB_WORDS.length-1];
-    for(const w of VOCAB_WORDS){ r -= vocabWeight(w.id); if(r <= 0){ word = w; break; } }
-  } while(VOCAB_WORDS.length > 1 && word.id === excludeId);
+    word = pool[pool.length-1];
+    for(const w of pool){ r -= vocabWeight(w.id); if(r <= 0){ word = w; break; } }
+  } while(pool.length > 1 && word.id === excludeId);
   return word;
 }
 let vocabSession = null;
@@ -10151,13 +10181,35 @@ function nextVocabQuestion(){
   document.getElementById('vocab-check-btn').disabled = false;
   vocabAwaitingNext = false;
 }
-function initVocabSession(){
-  vocabSession = { score:0, streak:0, current:null, lastWordId:null, roundAnswered:0, roundCorrect:0 };
+// mode: 'exam' (nur die aktuelle Prüfungswoche, siehe currentVocabPool) oder
+// 'all' (komplette Liste, wie das Training vor der Moduswahl bisher immer
+// lief). Wird jetzt über vocab-mode-select ausgewählt statt automatisch beim
+// Öffnen zu starten - siehe showVocabModeSelect()/startVocabMode() unten.
+function initVocabSession(mode){
+  vocabSession = { mode: mode || 'all', score:0, streak:0, current:null, lastWordId:null, roundAnswered:0, roundCorrect:0 };
+  document.getElementById('vocab-mode-indicator').textContent = vocabSession.mode === 'exam'
+    ? `🎯 Prüfungstraining - Woche ${CURRENT_VOCAB_WEEK}`
+    : '🔀 Alle Wörter';
   nextVocabQuestion();
 }
+// Zeigt die Moduswahl (Prüfungstraining vs. alle Wörter) statt direkt eine
+// Runde zu starten - siehe nav-vocab-Handler weiter unten, der jetzt hierher
+// statt direkt zu initVocabSession() zeigt.
+function showVocabModeSelect(){
+  document.getElementById('vocab-exam-week-hint').textContent = `Nur die ${VOCAB_WORDS.filter(w=>w.week===CURRENT_VOCAB_WEEK).length} Wörter für die nächste Prüfung (Woche ${CURRENT_VOCAB_WEEK})`;
+  document.getElementById('vocab-mode-select').classList.remove('hidden');
+  document.getElementById('vocab-quiz-area').classList.add('hidden');
+}
+function startVocabMode(mode){
+  document.getElementById('vocab-mode-select').classList.add('hidden');
+  document.getElementById('vocab-quiz-area').classList.remove('hidden');
+  initVocabSession(mode);
+}
+document.getElementById('vocab-mode-exam-btn').addEventListener('click', () => startVocabMode('exam'));
+document.getElementById('vocab-mode-all-btn').addEventListener('click', () => startVocabMode('all'));
 function startVocabSession(){
   showScreen('vocab-screen');
-  initVocabSession();
+  showVocabModeSelect();
 }
 function checkVocabAnswer(){
   const { word, direction } = vocabSession.current;
