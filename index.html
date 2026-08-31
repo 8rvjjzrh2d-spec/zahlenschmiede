@@ -6297,7 +6297,16 @@ try{
   // vollständige Begründung des neuen Dorf-Grundrisses).
   (function(){
     const stoneMat = new THREE.MeshStandardMaterial({ color:0x8a8578, roughness:0.9 });
-    const g = new THREE.Group(); g.position.set(-1.218,0,0.7); // *1.4 (Dorf-Vergrößerung, siehe wieseGroup-Kommentar) - muss zu villagePlazaCenter unten passen
+    // Bugreport "im Brunnen gefangen": die reine *1.4-Position (-1.218,0.7)
+    // lag noch innerhalb des eigenen (recht großen, ~2.35 Einheiten) Brunnen-
+    // Fußabdrucks vom festen Spawnpunkt (0,0) - der Charakter spawnt in
+    // enterExploreMode() IMMER exakt bei (0,0), unabhängig vom Biom, und
+    // isWorldPositionFree(0,0,0.9) direkt nach Spawn war dadurch false: der
+    // Spieler konnte sich von Anfang an nicht bewegen. Per Spiralsuche (echte
+    // Box-vs-Punkt-Prüfung über isWorldPositionFree, nicht Kreis-Näherung) auf
+    // den nächsten Platz verschoben, der (a) den Spawnpunkt freigibt und (b)
+    // nichts anderes im Dorf neu überlappt.
+    const g = new THREE.Group(); g.position.set(-3.5,0,1.0); // muss zu villagePlazaCenter unten passen
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.9,1.0,0.7,10), stoneMat); ring.position.y=0.35; g.add(ring);
     const water = new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,0.05,10), new THREE.MeshStandardMaterial({color:0x4a8ac9, roughness:0.3})); water.position.y=0.68; g.add(water);
     const postL = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.4,6), woodMat); postL.position.set(-0.7,1.3,0); g.add(postL);
@@ -6338,7 +6347,7 @@ try{
     wieseGroup.add(mesh);
     return mesh;
   }
-  const villagePlazaCenter = { x:-1.218, z:0.7 };
+  const villagePlazaCenter = { x:-3.5, z:1.0 };
   [
     { x:7.28, z:7.224 },   // zum Haus der Dorfältesten
     { x:-9.8, z:2.8 },       // zur Schmiede
