@@ -313,6 +313,13 @@
   .keypad-btn{ background: var(--slot); color: var(--ink); font-weight: 800; font-size: 18px; padding: 12px 0; }
   .keypad-btn:active{ background: var(--gold); }
   .quickbtn{ background: var(--panel-light); color: white; font-weight: 800; font-size: 12px; padding: 8px 12px; }
+  /* Vokabel-Multiple-Choice (siehe vocab-mc-options) - wiederverwendet
+     .quickbtn als Basis, nur Breite/Textausrichtung + Richtig/Falsch-Färbung
+     nach der Antwort kommen dazu. */
+  .vocab-mc-btn{ width:100%; text-align:left; }
+  .vocab-mc-btn.vocab-mc-correct{ background: var(--success); }
+  .vocab-mc-btn.vocab-mc-wrong{ background:#E53935; }
+  .vocab-mc-btn:disabled{ opacity:0.85; cursor:default; }
   .toggle-row{ display:flex; align-items:center; gap:8px; margin-bottom: 16px; font-size: 12px; font-weight: 700; }
   .toggle-row input{ width: 18px; height: 18px; }
   .option-row{ display: flex; gap: 8px; margin-bottom: 18px; }
@@ -562,15 +569,48 @@
       <span style="font-size:12px; font-weight:800;">🔤 Englisch-Vokabeln</span>
       <button class="ghost-btn" id="back-to-hub-from-vocab" style="width:auto; padding:4px 10px;">← Zurück</button>
     </div>
-    <div id="vocab-mode-select" style="text-align:center; padding: 22px 14px;">
-      <div class="pixel-label" style="margin-bottom:16px;">WAS MÖCHTEST DU ÜBEN?</div>
-      <button class="primary-btn" id="vocab-mode-exam-btn" style="max-width:340px; margin:0 auto;">🎯 PRÜFUNGSTRAINING</button>
-      <div class="account-sub" id="vocab-exam-week-hint" style="margin:6px 0 20px;">Nur die Wörter für die nächste Prüfung</div>
-      <button class="ghost-btn" id="vocab-mode-all-btn" style="max-width:340px; margin:0 auto; border:2px solid var(--ink); border-radius:8px;">🔀 ALLE WÖRTER</button>
-      <div class="account-sub" style="margin-top:6px;">Gemischtes Wiederholen aller bisherigen Wörter</div>
+
+    <div class="quickrow" id="vocab-tabs">
+      <button class="quickbtn cat-filter-btn active" data-tab="today">📅 Heute</button>
+      <button class="quickbtn cat-filter-btn" data-tab="week">📖 Diese Woche</button>
+      <button class="quickbtn cat-filter-btn" data-tab="mine">📚 Meine Wörter</button>
+      <button class="quickbtn cat-filter-btn" data-tab="exam">📝 Probeprüfung</button>
     </div>
+
+    <div id="vocab-tab-today">
+      <div class="journal-quest" id="vocab-today-summary" style="text-align:center;"></div>
+      <button class="primary-btn" id="vocab-today-start-btn" style="max-width:340px; margin:12px auto 0; display:block;">▶️ HEUTE ÜBEN</button>
+    </div>
+
+    <div class="hidden" id="vocab-tab-week">
+      <div class="journal-quest" id="vocab-week-summary" style="text-align:center;"></div>
+      <button class="primary-btn" id="vocab-week-start-btn" style="max-width:340px; margin:12px auto 0; display:block;">▶️ JETZT ÜBEN</button>
+    </div>
+
+    <div class="hidden" id="vocab-tab-mine">
+      <div class="journal-quest" id="vocab-mine-summary" style="text-align:center;"></div>
+      <button class="primary-btn" id="vocab-mine-start-btn" style="max-width:340px; margin:12px auto 10px; display:block;">▶️ ALTE WÖRTER TRAINIEREN</button>
+      <input type="text" class="answer" id="vocab-mine-search" placeholder="Wort suchen..." style="margin-bottom:8px; font-size:13px; padding:8px;">
+      <div class="quickrow" id="vocab-mine-filters">
+        <button class="quickbtn cat-filter-btn active" data-filter="all">Alle</button>
+        <button class="quickbtn cat-filter-btn" data-filter="green">🟢</button>
+        <button class="quickbtn cat-filter-btn" data-filter="yellow">🟡</button>
+        <button class="quickbtn cat-filter-btn" data-filter="red">🔴</button>
+      </div>
+      <div id="vocab-mine-list"></div>
+    </div>
+
+    <div class="hidden" id="vocab-tab-exam">
+      <div class="journal-quest" style="text-align:center;">
+        📝 <strong>Probeprüfung</strong><br>
+        <span class="journal-sub">Nur die Wörter dieser Woche, zufällige Reihenfolge, keine Hinweise und keine Korrektur während der Prüfung - genau wie beim echten Test.</span>
+      </div>
+      <button class="primary-btn" id="vocab-exam-start-btn" style="max-width:340px; margin:12px auto 0; display:block;">▶️ PROBEPRÜFUNG STARTEN</button>
+    </div>
+
     <div class="practice-layout hidden" id="vocab-quiz-area">
       <div class="practice-viewer-col">
+        <button class="ghost-btn" id="vocab-quiz-back-btn" style="width:auto; padding:2px 0; margin-bottom:8px; text-align:left;">← Übersicht</button>
         <div class="pixel-label" id="vocab-mode-indicator">🔀 Alle Wörter</div>
         <div class="pixel-label">RUNDE (10 WÖRTER)</div>
         <div class="progress-hint-label" id="vocab-round-label">0/10 beantwortet</div>
@@ -587,11 +627,41 @@
           </div>
           <div class="pixel-label" id="vocab-prompt-lang">Englisch → Deutsch</div>
           <div class="equation" id="vocab-prompt-word">word</div>
+          <button class="ghost-btn hidden" id="vocab-spelling-play-btn" style="font-size:36px; padding:8px; border:2px solid var(--ink); border-radius:50%; width:64px; height:64px; margin:0 auto 8px;">🔊</button>
           <input type="text" class="answer" id="vocab-answer-input" autocomplete="off" autocapitalize="off" spellcheck="false">
           <div class="feedback" id="vocab-feedback"></div>
           <button class="check-btn" id="vocab-check-btn">PRÜFEN ✔️</button>
+          <div class="hidden" id="vocab-mc-options" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;"></div>
         </div>
       </div>
+    </div>
+
+    <div class="practice-layout hidden" id="vocab-mock-exam-area">
+      <div class="practice-viewer-col">
+        <div class="pixel-label">📝 PROBEPRÜFUNG</div>
+        <div class="progress-hint-label" id="vocab-exam-progress-label">Frage 1/10</div>
+        <div class="progress-hint-bar-track"><div class="progress-hint-bar-fill" id="vocab-exam-progress-fill" style="width:0%;"></div></div>
+      </div>
+      <div class="practice-controls-col">
+        <div class="question-box">
+          <div class="vocab-direction">
+            <span class="vocab-flag" id="vocab-exam-flag-from">🇬🇧</span>
+            <span class="vocab-direction-arrow">→</span>
+            <span class="vocab-flag" id="vocab-exam-flag-to">🇩🇪</span>
+          </div>
+          <div class="pixel-label" id="vocab-exam-prompt-lang">Englisch → Deutsch</div>
+          <div class="equation" id="vocab-exam-prompt-word">word</div>
+          <input type="text" class="answer" id="vocab-exam-answer-input" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button class="check-btn" id="vocab-exam-next-btn">WEITER →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hidden" id="vocab-mock-results-area" style="padding: 10px 2px; text-align:center;">
+      <div class="pixel-label" id="vocab-mock-result-title" style="font-size:14px; margin-bottom:14px;">Probeprüfung: 0 / 0 richtig</div>
+      <div id="vocab-mock-wrong-list" style="text-align:left; margin-bottom:14px;"></div>
+      <button class="primary-btn" id="vocab-mock-drill-wrong-btn" style="max-width:340px; margin:0 auto 8px; display:block;">🔁 DIESE WÖRTER ÜBEN</button>
+      <button class="ghost-btn" id="vocab-mock-back-btn" style="max-width:340px; margin:0 auto; display:block;">← Zurück zur Übersicht</button>
     </div>
   </div>
 
@@ -2631,7 +2701,7 @@ const APPEARANCE_CATEGORIES = [
 // Alte Speicherstände laden dadurch immer noch korrekt, auch nach vielen
 // zukünftigen Änderungen.
 // =====================================================================
-const CURRENT_SAVE_VERSION = 1;
+const CURRENT_SAVE_VERSION = 2;
 function migrateProfileData(loaded){
   if(!loaded) return null;
   let v = loaded.saveVersion || 0;
@@ -2644,7 +2714,36 @@ function migrateProfileData(loaded){
     if(OLD_TO_NEW_BG[loaded.selectedBackground]) loaded.selectedBackground = OLD_TO_NEW_BG[loaded.selectedBackground];
     v = 1;
   }
-  // TODO v1 -> v2 (Phase 5/6): xp, level, unlockedRecipes, questProgress, achievements, settings
+  // v1 -> v2: Vokabel-Lernfortschritt von den alten flachen Feldern
+  // (vocabMastery[id]:0-100, vocabStats[id]:{correct,total}) in das neue,
+  // reichhaltigere profile.vocabProgress[id] übernehmen (Mastery pro
+  // Fähigkeit, SRS-Fälligkeit - siehe defaultProfile() für die Zielform und
+  // getVocabProgress() für denselben Aufbau bei brandneuen Wörtern). Alte
+  // Felder werden bewusst NICHT gelöscht (harmlos, werden ab jetzt nirgends
+  // mehr gelesen) - todayStr() ist zwar erst weiter unten im Skript
+  // deklariert, aber als function-Deklaration voll gehoisted, siehe
+  // dieselbe Begründung beim nav-vocab-Handler weiter unten.
+  if(v < 2){
+    if(loaded.vocabMastery){
+      loaded.vocabProgress = loaded.vocabProgress || {};
+      Object.keys(loaded.vocabMastery).forEach(id => {
+        if(loaded.vocabProgress[id]) return; // schon migriert
+        const mastery = loaded.vocabMastery[id];
+        const stat = (loaded.vocabStats && loaded.vocabStats[id]) || {correct:0,total:0};
+        const wrong = Math.max(0, (stat.total||0) - (stat.correct||0));
+        // Alte Daten unterschieden nicht nach Richtung/Übungstyp - komplett
+        // in en2de gebucht (bewusste Vereinfachung, verzerrt die Anzeige nur
+        // minimal und korrigiert sich durch neue Übungen von selbst).
+        loaded.vocabProgress[id] = {
+          mastery, correct: stat.correct||0, wrong,
+          bySkill: { en2de:{correct:stat.correct||0, wrong}, de2en:{correct:0,wrong:0}, spelling:{correct:0,wrong:0} },
+          lastReviewed: null, nextReview: todayStr(), intervalDays: 1
+        };
+      });
+    }
+    v = 2;
+  }
+  // TODO v2 -> v3 (Phase 5/6): xp, level, unlockedRecipes, questProgress, achievements, settings
   loaded.saveVersion = v;
   return loaded;
 }
@@ -2670,12 +2769,16 @@ function defaultProfile(){
     // add_20/100/1000, sub_20/100/1000, mult_gap, add_gap, sub_gap.
     // Bleibt über das gesamte Spiel erhalten, unabhängig vom Kapitel.
     mastery: {},
-    // Vokabeltrainer (andere Fächer als Mathe, aktuell Englisch): analog zum
-    // Mastery-System oben - vocabMastery[wortId] (0-100, gewichtete Auswahl,
-    // schwächere Wörter kommen häufiger dran), vocabStats[wortId] für die
-    // Fortschrittsanzeige (correct/total, siehe masteryRing()).
+    // Vokabeltrainer (andere Fächer als Mathe, aktuell Englisch): vocabMastery/
+    // vocabStats sind das ALTE, jetzt ungenutzte Schema (v1) - bleiben nur aus
+    // Kompatibilitätsgründen deklariert, werden nirgends mehr geschrieben oder
+    // gelesen (siehe migrateProfileData() v1->v2). Aktuelles Schema ist
+    // vocabProgress[wortId]: { mastery:0-100, correct, wrong, bySkill:{
+    // en2de,de2en,spelling}, lastReviewed, nextReview, intervalDays } - siehe
+    // getVocabProgress()/updateVocabMastery() beim Vokabeltrainer weiter unten.
     vocabMastery: {},
     vocabStats: {},
+    vocabProgress: {},
     achievements: [],
     // Pro-Quest-Fortschritt für die mathematischen Lernziele der bestehenden
     // Quests (siehe questMathObjective/isMathObjectiveMet) - wird während des
@@ -2778,6 +2881,7 @@ async function loadProfileData(id){
   merged.mastery = (loaded && loaded.mastery) || {};
   merged.vocabMastery = (loaded && loaded.vocabMastery) || {};
   merged.vocabStats = (loaded && loaded.vocabStats) || {};
+  merged.vocabProgress = (loaded && loaded.vocabProgress) || {};
   merged.achievements = (loaded && loaded.achievements) || [];
   merged.questMathProgress = (loaded && loaded.questMathProgress) || {};
   merged.biomePets = (loaded && loaded.biomePets) || {};
@@ -8575,7 +8679,7 @@ document.getElementById('nav-inventory').addEventListener('click', () => openScr
 document.getElementById('nav-customize').addEventListener('click', () => openScreenAsFullscreenPopup('customize-screen', renderCustomizeScreen));
 document.getElementById('nav-pets').addEventListener('click', () => openScreenAsFullscreenPopup('pet-menu-screen', renderPetMenuScreen));
 document.getElementById('nav-journal').addEventListener('click', () => openScreenAsFullscreenPopup('journal-screen', renderJournalScreen));
-document.getElementById('nav-vocab').addEventListener('click', () => openScreenAsFullscreenPopup('vocab-screen', showVocabModeSelect));
+document.getElementById('nav-vocab').addEventListener('click', () => openScreenAsFullscreenPopup('vocab-screen', openVocabHome));
 // (nav-world entfernt - redundant mit Tagebuch, das dieselbe Welt-Auswahl bereits anzeigt)
 
 // Popup-Overlay-System für die Vollbildansicht: öffnet dieselben Bildschirme
@@ -10056,15 +10160,19 @@ document.getElementById('abort-btn').addEventListener('click', () => {
 // updateMastery() für Mathe. Beliebig oft wiederholbar (keine feste Länge),
 // schwächere Wörter werden per Gewichtung häufiger gefragt (siehe pickVocabWord).
 // =====================================================================
-// Jedes Wort trägt jetzt eine "week" (Schul-Wochennummer, entspricht der
+// Jedes Wort trägt eine "week" (Schul-Wochennummer, entspricht der
 // Reihenfolge, in der neue Vokabellisten reinkommen - nicht zwingend die
-// Kalenderwoche). Grund: zwei Übungsmodi (siehe vocab-mode-select unten) -
-// "Prüfungstraining" nutzt NUR die Wörter mit week===CURRENT_VOCAB_WEEK
-// (der Stoff der kommenden Prüfung), "Alle Wörter" mischt wie bisher über
-// die komplette Liste. CURRENT_VOCAB_WEEK muss bei jeder neuen Wochenliste
-// zusammen mit den neuen Einträgen hochgezählt werden, sonst zeigt das
-// Prüfungstraining weiterhin die alte(n) Woche(n) an.
+// Kalenderwoche). Der Tab "Diese Woche"/die Probeprüfung nutzen NUR die
+// Wörter mit week===CURRENT_VOCAB_WEEK, "Meine Wörter" alle anderen.
+// CURRENT_VOCAB_WEEK und VOCAB_TEST_DATE müssen bei jeder neuen Wochenliste
+// zusammen mit den neuen Einträgen aktualisiert werden, sonst zeigen "Diese
+// Woche"/Probeprüfung/"Heute" weiterhin die alte Woche bzw. ein falsches
+// Prüfungsdatum an. VOCAB_TEST_DATE bewusst `null` lassbar (statt geraten) -
+// die UI zeigt dann "noch nicht eingetragen" statt eines erfundenen Datums;
+// bis dahin rechnet die Heute-Gewichtung mit einem neutralen Standardwert
+// (siehe vocabWeekShareToday()).
 const CURRENT_VOCAB_WEEK = 2;
+const VOCAB_TEST_DATE = null; // z.B. '2026-09-05' - vom Nutzer pro Woche mitteilen
 const VOCAB_WORDS = [
   { id:'sense', en:'sense', de:['Sinn'], week:1 },
   { id:'see', en:'see', de:['sehen'], week:1 },
@@ -10107,44 +10215,199 @@ function isVocabAnswerCorrect(word, direction, value){
   const norm = normalizeVocabAnswer(value);
   return norm !== '' && accepted.some(a => normalizeVocabAnswer(a) === norm);
 }
-function updateVocabMastery(wordId, wasCorrect){
-  if(profile.vocabMastery[wordId] === undefined) profile.vocabMastery[wordId] = 50; // neutraler Start
-  if(wasCorrect) profile.vocabMastery[wordId] = Math.min(100, profile.vocabMastery[wordId] + 3);
-  else profile.vocabMastery[wordId] = Math.max(0, profile.vocabMastery[wordId] - 5); // wiederholte Fehler senken kumulativ weiter
+// =====================================================================
+// VOKABEL-LERNFORTSCHRITT (profile.vocabProgress[wortId]) + SRS
+// =====================================================================
+// Liefert (und erzeugt bei Bedarf) den Fortschrittsdatensatz eines Wortes -
+// zentrale Zugriffsstelle, damit neue Wörter nie an einem fehlenden Eintrag
+// scheitern (weder beim allerersten Üben noch nach einer neuen Wochenliste).
+function getVocabProgress(wordId){
+  if(!profile.vocabProgress[wordId]){
+    profile.vocabProgress[wordId] = {
+      mastery: 50, correct: 0, wrong: 0,
+      bySkill: { en2de:{correct:0,wrong:0}, de2en:{correct:0,wrong:0}, spelling:{correct:0,wrong:0} },
+      lastReviewed: null, nextReview: todayStr(), intervalDays: 1
+    };
+  }
+  return profile.vocabProgress[wordId];
+}
+function vocabStatus(wordId){
+  const m = getVocabProgress(wordId).mastery;
+  if(m >= 70) return 'green';
+  if(m >= 40) return 'yellow';
+  return 'red';
+}
+function vocabStatusCounts(pool){
+  const counts = { green:0, yellow:0, red:0 };
+  pool.forEach(w => counts[vocabStatus(w.id)]++);
+  return counts;
+}
+function daysBetween(dateStrA, dateStrB){
+  return Math.round((new Date(dateStrB+'T00:00:00') - new Date(dateStrA+'T00:00:00')) / 86400000);
+}
+const VOCAB_WEEKDAYS = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+function formatVocabDate(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d)) return dateStr;
+  return `${VOCAB_WEEKDAYS[d.getDay()]}, ${dateStr}`;
+}
+// Einfaches, nachvollziehbares Intervall-System (kein volles SM-2): richtig
+// beantwortet verdoppelt das Intervall (Deckel 60 Tage), falsch beantwortet
+// setzt es hart auf 1 Tag zurück - "ein vermeintlich sicheres Wort erscheint
+// automatisch häufiger", wenn es wieder falsch war (Punkt 7 der Spezifikation).
+function scheduleVocabReview(progress, wasCorrect){
+  progress.intervalDays = wasCorrect ? Math.min(60, Math.max(1, Math.round((progress.intervalDays||1) * 2))) : 1;
+  const next = new Date(); next.setDate(next.getDate() + progress.intervalDays);
+  progress.nextReview = `${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-${String(next.getDate()).padStart(2,'0')}`;
+  progress.lastReviewed = todayStr();
+}
+// Zusätzliches Gewicht für fällige/überfällige alte Wörter (Spaced
+// Repetition) - auch nicht fällige Wörter behalten ein Mindestgewicht 3,
+// damit nichts komplett aus der Wiederholung verschwindet (gleiches Prinzip
+// wie vocabWeight() unten).
+function srsUrgency(wordId){
+  const p = getVocabProgress(wordId);
+  const daysOverdue = daysBetween(p.nextReview, todayStr());
+  return daysOverdue > 0 ? Math.min(40, 10 + daysOverdue*2) : 3;
+}
+// Anteil, den Wochenwörter im "Heute"-Mischpool bekommen - steigt, je näher
+// die Prüfung rückt (Punkt 2: "Je näher die Prüfung rückt, desto stärker...").
+// Ohne bekanntes VOCAB_TEST_DATE ein neutraler Standardwert statt Raten.
+function vocabWeekShareToday(){
+  if(!VOCAB_TEST_DATE) return 0.4;
+  const daysLeft = daysBetween(todayStr(), VOCAB_TEST_DATE);
+  if(daysLeft <= 1) return 0.85;
+  if(daysLeft <= 3) return 0.7;
+  if(daysLeft <= 6) return 0.55;
+  return 0.4;
+}
+// MC-Antworten zählen nur zur Hälfte in die Mastery-Änderung (Punkt 3: freie
+// Eingaben sollen stärker gewichtet werden als Multiple Choice). bySkill wird
+// nach normalisiertem Skill gebucht (mc_en2de/mc_de2en fließen in dieselben
+// Töpfe wie ihre freien Pendants), damit z.B. hohe en2de-Mastery bei
+// gleichzeitig niedriger spelling-Mastery sichtbar bleibt - genau der
+// "kennt die Bedeutung, kann's aber nicht schreiben"-Fall aus Punkt 3.
+const VOCAB_MC_TYPES = ['mc_en2de','mc_de2en'];
+function normalizeVocabSkill(exerciseType){
+  if(exerciseType === 'mc_en2de') return 'en2de';
+  if(exerciseType === 'mc_de2en') return 'de2en';
+  return exerciseType; // 'en2de' | 'de2en' | 'spelling'
+}
+function updateVocabMastery(wordId, wasCorrect, exerciseType){
+  const p = getVocabProgress(wordId);
+  const weight = VOCAB_MC_TYPES.includes(exerciseType) ? 0.5 : 1;
+  p.mastery = wasCorrect ? Math.min(100, p.mastery + 3*weight) : Math.max(0, p.mastery - 5*weight);
+  if(wasCorrect) p.correct += 1; else p.wrong += 1;
+  const skill = normalizeVocabSkill(exerciseType);
+  if(!p.bySkill[skill]) p.bySkill[skill] = {correct:0,wrong:0};
+  if(wasCorrect) p.bySkill[skill].correct += 1; else p.bySkill[skill].wrong += 1;
+  scheduleVocabReview(p, wasCorrect);
 }
 // Gewichtete Zufallsauswahl: schwächere Wörter (niedrige Mastery) kommen
 // häufiger dran, aber auch bereits gut gekonnte Wörter bleiben im Umlauf
 // (Mindestgewicht 5), damit nichts komplett aus der Wiederholung verschwindet.
 function vocabWeight(wordId){
-  const mastery = profile.vocabMastery[wordId] === undefined ? 50 : profile.vocabMastery[wordId];
-  return Math.max(5, 100 - mastery);
+  return Math.max(5, 100 - getVocabProgress(wordId).mastery);
 }
-// Zwei Übungsmodi (vocabSession.mode, siehe vocab-mode-select): 'exam'
-// grenzt den Wortpool auf die aktuelle Prüfungswoche ein (CURRENT_VOCAB_WEEK),
-// 'all' (Standard/Fallback) nutzt wie bisher die komplette Liste. Fällt auf
-// die volle Liste zurück, falls die aktuelle Woche (noch) keine Wörter hat -
-// sollte in der Praxis nie eintreten, ist aber ein günstiges Sicherheitsnetz.
-function currentVocabPool(){
-  if(vocabSession && vocabSession.mode === 'exam'){
-    const pool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
-    if(pool.length) return pool;
-  }
-  return VOCAB_WORDS;
+// Für "Meine Wörter"/den alten Anteil von "Heute": Mastery- UND SRS-Gewicht
+// zusammen, damit sowohl schwache als auch schlicht lange nicht geübte
+// Wörter häufiger drankommen.
+function vocabCombinedWeight(wordId){
+  return vocabWeight(wordId) + srsUrgency(wordId);
 }
-function pickVocabWord(excludeId){
-  const pool = currentVocabPool();
+function weightedVocabPick(pool, weightFn, excludeId){
   let word;
   do {
-    const totalWeight = pool.reduce((sum,w) => sum + vocabWeight(w.id), 0);
+    const totalWeight = pool.reduce((sum,w) => sum + weightFn(w.id), 0);
     let r = Math.random() * totalWeight;
     word = pool[pool.length-1];
-    for(const w of pool){ r -= vocabWeight(w.id); if(r <= 0){ word = w; break; } }
+    for(const w of pool){ r -= weightFn(w.id); if(r <= 0){ word = w; break; } }
   } while(pool.length > 1 && word.id === excludeId);
   return word;
 }
+// vocabSession.mode: 'week' (nur CURRENT_VOCAB_WEEK), 'mine' (alle anderen
+// Wochen), 'today' (Mischpool, siehe unten), 'ids' (expliziter Wort-ID-Pool,
+// z.B. die falschen Wörter nach einer Probeprüfung).
+function currentVocabPool(){
+  const mode = vocabSession && vocabSession.mode;
+  if(mode === 'ids'){
+    const pool = VOCAB_WORDS.filter(w => (vocabSession.idPool||[]).includes(w.id));
+    return pool.length ? pool : VOCAB_WORDS;
+  }
+  if(mode === 'mine'){
+    const pool = VOCAB_WORDS.filter(w => w.week !== CURRENT_VOCAB_WEEK);
+    return pool.length ? pool : VOCAB_WORDS;
+  }
+  const pool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
+  return pool.length ? pool : VOCAB_WORDS; // 'week' und Fallback
+}
+function pickVocabWord(excludeId){
+  const mode = vocabSession && vocabSession.mode;
+  if(mode === 'today'){
+    const weekPool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
+    const minePool = VOCAB_WORDS.filter(w => w.week !== CURRENT_VOCAB_WEEK);
+    const useWeek = minePool.length === 0 || Math.random() < vocabWeekShareToday();
+    if(useWeek && weekPool.length) return weightedVocabPick(weekPool, vocabWeight, excludeId);
+    if(minePool.length) return weightedVocabPick(minePool, vocabCombinedWeight, excludeId);
+    return weightedVocabPick(VOCAB_WORDS, vocabWeight, excludeId);
+  }
+  const pool = currentVocabPool();
+  const weightFn = mode === 'mine' || mode === 'ids' ? vocabCombinedWeight : vocabWeight;
+  return weightedVocabPick(pool, weightFn, excludeId);
+}
+// Multiple Choice: 3 Distraktoren aus der GESAMTEN Wortliste (nicht nur dem
+// aktiven Pool, sonst zu wenig Auswahl bei kleinen Wochenlisten).
+function sampleDistractors(word, direction, n){
+  const pool = VOCAB_WORDS.filter(w => w.id !== word.id);
+  const shuffled = pool.slice().sort(() => Math.random()-0.5);
+  return shuffled.slice(0,n).map(w => direction==='en2de' ? w.de[0] : w.en);
+}
+function buildMcOptions(word, direction){
+  const correct = direction==='en2de' ? word.de[0] : word.en;
+  const options = [correct, ...sampleDistractors(word, direction, 3)];
+  for(let i=options.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [options[i],options[j]]=[options[j],options[i]]; }
+  return { options, correct };
+}
+// Wählt den Übungstyp pro Frage: neue/schwache Wörter überwiegend Multiple
+// Choice (Punkt 4: "MC hauptsächlich zum Einstieg"), sonst Mix aus
+// Freitext/Spelling - Spelling-Anteil steigt mit Mastery und, für den
+// Wochen-/Heute-Kontext, mit Nähe zum Prüfungsdatum (Punkt 2). Probeprüfung
+// bekommt ihren eigenen, immer-Freitext-Ablauf (siehe startMockExam) und
+// ruft diese Funktion nicht auf.
+function pickExerciseType(word, mode){
+  const p = getVocabProgress(word.id);
+  const attempted = p.correct + p.wrong;
+  if(attempted < 2 || p.mastery < 35){
+    if(Math.random() < 0.75) return Math.random() < 0.5 ? 'mc_en2de' : 'mc_de2en';
+    return Math.random() < 0.5 ? 'en2de' : 'de2en';
+  }
+  let spellingChance = 0.2 + (p.mastery-35)/100;
+  if(mode === 'week' || mode === 'today'){
+    const daysLeft = VOCAB_TEST_DATE ? daysBetween(todayStr(), VOCAB_TEST_DATE) : 10;
+    if(daysLeft <= 3) spellingChance += 0.2;
+  }
+  spellingChance = Math.min(0.85, spellingChance);
+  if(Math.random() < spellingChance) return 'spelling';
+  return Math.random() < 0.5 ? 'en2de' : 'de2en';
+}
+// Browser-eigene Sprachausgabe statt Audio-Assets - kein Server/Speicher
+// nötig, funktioniert direkt auf der gehosteten Seite. Britisches Englisch
+// passend zum Schulbuch-Vokabular (z.B. "Chilbi"/"Caramelbonbon").
+function speakVocabWord(text){
+  try {
+    if(!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-GB'; u.rate = 0.85;
+    window.speechSynthesis.speak(u);
+  } catch(e){ /* Sprachausgabe ist ein Extra, kein Blocker für die Übung */ }
+}
+
 let vocabSession = null;
 let vocabAwaitingNext = false;
 let vocabActionLock = false;
+let mockExamSession = null;
+let currentVocabTab = 'today';
 // Zeigt AUSSCHLIESSLICH einen Runden-Fortschrittsbalken (X/10 beantwortet,
 // davon Y richtig) - bewusst KEINE Wortliste (weder Englisch noch Deutsch).
 // Bei "welches deutsche Wort passt zu welchem englischen" wäre selbst eine
@@ -10158,96 +10421,112 @@ function renderVocabRoundProgress(){
   document.getElementById('vocab-round-fill').style.width = pct + '%';
   document.getElementById('vocab-round-correct').textContent = `Richtig: ${correct}/${answered}`;
 }
+// Rendert die nächste Frage inkl. Verzweigung nach Übungstyp: mc_* zeigt
+// Options-Buttons statt Texteingabe, spelling zeigt einen 🔊-Button statt
+// des Wort-Texts, en2de/de2en bleiben wie bisher Freitext.
 function nextVocabQuestion(){
-  // Neue Runde beginnt, sobald die vorherige 10 Wörter voll ist - Üben ist
-  // beliebig oft wiederholbar, es gibt keine feste Sitzungslänge.
   if(vocabSession.roundAnswered >= 10){ vocabSession.roundAnswered = 0; vocabSession.roundCorrect = 0; }
   renderVocabRoundProgress();
   const word = pickVocabWord(vocabSession.lastWordId);
   vocabSession.lastWordId = word.id;
-  const direction = Math.random() < 0.5 ? 'en2de' : 'de2en';
-  vocabSession.current = { word, direction };
-  document.getElementById('vocab-prompt-lang').textContent = direction === 'en2de' ? 'Englisch → Deutsch' : 'Deutsch → Englisch';
-  document.getElementById('vocab-flag-from').textContent = direction === 'en2de' ? '🇬🇧' : '🇩🇪';
-  document.getElementById('vocab-flag-to').textContent = direction === 'en2de' ? '🇩🇪' : '🇬🇧';
-  document.getElementById('vocab-prompt-word').textContent = direction === 'en2de' ? word.en : word.de[0];
-  document.getElementById('vocab-score').textContent = vocabSession.score;
-  document.getElementById('vocab-streak').textContent = vocabSession.streak;
+  const exerciseType = pickExerciseType(word, vocabSession.mode);
+  let direction;
+  if(exerciseType === 'mc_en2de') direction = 'en2de';
+  else if(exerciseType === 'mc_de2en') direction = 'de2en';
+  else if(exerciseType === 'spelling') direction = 'de2en'; // Antwort ist immer das englische Wort
+  else direction = exerciseType;
+  vocabSession.current = { word, direction, exerciseType };
+
+  const mcArea = document.getElementById('vocab-mc-options');
+  const input = document.getElementById('vocab-answer-input');
+  const checkBtn = document.getElementById('vocab-check-btn');
+  const playBtn = document.getElementById('vocab-spelling-play-btn');
+  const promptWord = document.getElementById('vocab-prompt-word');
   const feedback = document.getElementById('vocab-feedback');
   feedback.textContent = ''; feedback.className = 'feedback';
-  const input = document.getElementById('vocab-answer-input');
-  input.value=''; input.className='answer'; input.disabled=false; input.focus();
-  document.getElementById('vocab-check-btn').textContent = 'PRÜFEN ✔️';
-  document.getElementById('vocab-check-btn').disabled = false;
   vocabAwaitingNext = false;
+
+  mcArea.classList.add('hidden'); mcArea.innerHTML = '';
+  playBtn.classList.add('hidden');
+  promptWord.classList.remove('hidden');
+  input.classList.remove('hidden');
+  checkBtn.classList.remove('hidden');
+  checkBtn.textContent = 'PRÜFEN ✔️'; checkBtn.disabled = false;
+  input.value=''; input.className='answer'; input.disabled=false;
+
+  if(exerciseType === 'spelling'){
+    document.getElementById('vocab-prompt-lang').textContent = '🔊 Hör zu und tippe das Wort';
+    document.getElementById('vocab-flag-from').textContent = '🔊';
+    document.getElementById('vocab-flag-to').textContent = '🇬🇧';
+    promptWord.classList.add('hidden');
+    playBtn.classList.remove('hidden');
+    speakVocabWord(word.en);
+  } else {
+    document.getElementById('vocab-prompt-lang').textContent = direction === 'en2de' ? 'Englisch → Deutsch' : 'Deutsch → Englisch';
+    document.getElementById('vocab-flag-from').textContent = direction === 'en2de' ? '🇬🇧' : '🇩🇪';
+    document.getElementById('vocab-flag-to').textContent = direction === 'en2de' ? '🇩🇪' : '🇬🇧';
+    promptWord.textContent = direction === 'en2de' ? word.en : word.de[0];
+    if(exerciseType === 'mc_en2de' || exerciseType === 'mc_de2en'){
+      input.classList.add('hidden'); checkBtn.classList.add('hidden');
+      const { options, correct } = buildMcOptions(word, direction);
+      mcArea.innerHTML = options.map(opt => `<button class="quickbtn vocab-mc-btn" data-value="${opt.replace(/"/g,'&quot;')}">${opt}</button>`).join('');
+      mcArea.classList.remove('hidden');
+      mcArea.querySelectorAll('.vocab-mc-btn').forEach(btn => btn.addEventListener('click', () => handleMcAnswer(btn, correct)));
+    }
+  }
+  document.getElementById('vocab-score').textContent = vocabSession.score;
+  document.getElementById('vocab-streak').textContent = vocabSession.streak;
+  if(!input.classList.contains('hidden')) input.focus();
 }
-// mode: 'exam' (nur die aktuelle Prüfungswoche, siehe currentVocabPool) oder
-// 'all' (komplette Liste, wie das Training vor der Moduswahl bisher immer
-// lief). Wird jetzt über vocab-mode-select ausgewählt statt automatisch beim
-// Öffnen zu starten - siehe showVocabModeSelect()/startVocabMode() unten.
-function initVocabSession(mode){
-  vocabSession = { mode: mode || 'all', score:0, streak:0, current:null, lastWordId:null, roundAnswered:0, roundCorrect:0 };
-  document.getElementById('vocab-mode-indicator').textContent = vocabSession.mode === 'exam'
-    ? `🎯 Prüfungstraining - Woche ${CURRENT_VOCAB_WEEK}`
-    : '🔀 Alle Wörter';
-  nextVocabQuestion();
-}
-// Zeigt die Moduswahl (Prüfungstraining vs. alle Wörter) statt direkt eine
-// Runde zu starten - siehe nav-vocab-Handler weiter unten, der jetzt hierher
-// statt direkt zu initVocabSession() zeigt.
-function showVocabModeSelect(){
-  document.getElementById('vocab-exam-week-hint').textContent = `Nur die ${VOCAB_WORDS.filter(w=>w.week===CURRENT_VOCAB_WEEK).length} Wörter für die nächste Prüfung (Woche ${CURRENT_VOCAB_WEEK})`;
-  document.getElementById('vocab-mode-select').classList.remove('hidden');
-  document.getElementById('vocab-quiz-area').classList.add('hidden');
-}
-function startVocabMode(mode){
-  document.getElementById('vocab-mode-select').classList.add('hidden');
-  document.getElementById('vocab-quiz-area').classList.remove('hidden');
-  initVocabSession(mode);
-}
-document.getElementById('vocab-mode-exam-btn').addEventListener('click', () => startVocabMode('exam'));
-document.getElementById('vocab-mode-all-btn').addEventListener('click', () => startVocabMode('all'));
-function startVocabSession(){
-  showScreen('vocab-screen');
-  showVocabModeSelect();
+// Gemeinsame Auswertung für Freitext UND Multiple Choice - Mastery/SRS-
+// Update, Punkte/Serie, Feedback-Text, Speichern. Nur die Vorab-Prüfung
+// (Freitext-Normalisierung vs. exakter Button-Wert) unterscheidet sich,
+// siehe checkVocabAnswer()/handleMcAnswer().
+function finishVocabAnswer(correct){
+  const { word, direction, exerciseType } = vocabSession.current;
+  updateVocabMastery(word.id, correct, exerciseType);
+  vocabSession.roundAnswered += 1;
+  if(correct) vocabSession.roundCorrect += 1;
+
+  const feedback = document.getElementById('vocab-feedback');
+  if(correct){
+    vocabSession.score += 10 + Math.min(vocabSession.streak,5)*2;
+    vocabSession.streak += 1;
+    if(vocabSession.streak > (profile.bestVocabStreak||0)) profile.bestVocabStreak = vocabSession.streak;
+    feedback.textContent = pickPraise();
+    feedback.className = 'feedback correct';
+    grantXP(6, 'vocab');
+  } else {
+    vocabSession.streak = 0;
+    const accepted = direction === 'en2de' ? word.de.join(' / ') : word.en;
+    feedback.textContent = `Fast! Richtig wäre: ${accepted}`;
+    feedback.className = 'feedback wrong';
+  }
+  document.getElementById('vocab-score').textContent = vocabSession.score;
+  document.getElementById('vocab-streak').textContent = vocabSession.streak;
+  const checkBtn = document.getElementById('vocab-check-btn');
+  checkBtn.classList.remove('hidden'); checkBtn.disabled = false; checkBtn.textContent = 'WEITER →';
+  vocabAwaitingNext = true;
+  renderVocabRoundProgress();
+  saveProfile(profile);
 }
 function checkVocabAnswer(){
   const { word, direction } = vocabSession.current;
   const input = document.getElementById('vocab-answer-input');
-  const feedback = document.getElementById('vocab-feedback');
-  const checkBtn = document.getElementById('vocab-check-btn');
   const correct = isVocabAnswerCorrect(word, direction, input.value);
-
-  if(!profile.vocabStats[word.id]) profile.vocabStats[word.id] = {correct:0,total:0};
-  profile.vocabStats[word.id].total += 1;
-  updateVocabMastery(word.id, correct);
-  vocabSession.roundAnswered += 1;
-  if(correct) vocabSession.roundCorrect += 1;
-
-  if(correct){
-    profile.vocabStats[word.id].correct += 1;
-    vocabSession.score += 10 + Math.min(vocabSession.streak,5)*2;
-    vocabSession.streak += 1;
-    if(vocabSession.streak > (profile.bestVocabStreak||0)) profile.bestVocabStreak = vocabSession.streak;
-    input.className='answer correct';
-    feedback.textContent = pickPraise();
-    feedback.className='feedback correct';
-    grantXP(6, 'vocab');
-  } else {
-    vocabSession.streak = 0;
-    input.className='answer wrong';
-    const accepted = direction === 'en2de' ? word.de.join(' / ') : word.en;
-    feedback.textContent = `Fast! Richtig wäre: ${accepted}`;
-    feedback.className='feedback wrong';
-  }
-
-  document.getElementById('vocab-score').textContent = vocabSession.score;
-  document.getElementById('vocab-streak').textContent = vocabSession.streak;
+  input.className = correct ? 'answer correct' : 'answer wrong';
   input.disabled = true;
-  vocabAwaitingNext = true;
-  checkBtn.textContent = 'WEITER →';
-  renderVocabRoundProgress();
-  saveProfile(profile);
+  finishVocabAnswer(correct);
+}
+function handleMcAnswer(btn, correctValue){
+  if(vocabAwaitingNext) return; // Doppelklick-/Doppeltipp-Schutz
+  const correct = btn.dataset.value === correctValue;
+  document.querySelectorAll('#vocab-mc-options .vocab-mc-btn').forEach(b => {
+    b.disabled = true;
+    if(b.dataset.value === correctValue) b.classList.add('vocab-mc-correct');
+    else if(b === btn) b.classList.add('vocab-mc-wrong');
+  });
+  finishVocabAnswer(correct);
 }
 function primaryVocabAction(){
   if(vocabActionLock) return;
@@ -10255,17 +10534,197 @@ function primaryVocabAction(){
   try {
     const input = document.getElementById('vocab-answer-input');
     if(vocabAwaitingNext){ vocabAwaitingNext=false; nextVocabQuestion(); return; }
+    if(input.classList.contains('hidden')) return; // MC-Frage - Antwort läuft über handleMcAnswer
     if(input.value.trim()==='') return;
     checkVocabAnswer();
   } finally { vocabActionLock = false; }
 }
 document.getElementById('vocab-check-btn').addEventListener('click', primaryVocabAction);
+document.getElementById('vocab-spelling-play-btn').addEventListener('click', () => {
+  if(vocabSession && vocabSession.current) speakVocabWord(vocabSession.current.word.en);
+});
+
+// =====================================================================
+// TAB-NAVIGATION (Heute/Diese Woche/Meine Wörter/Probeprüfung) + Start
+// =====================================================================
+function hideAllVocabPanels(){
+  ['vocab-tab-today','vocab-tab-week','vocab-tab-mine','vocab-tab-exam'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  document.getElementById('vocab-tabs').classList.add('hidden');
+  document.getElementById('vocab-quiz-area').classList.add('hidden');
+  document.getElementById('vocab-mock-exam-area').classList.add('hidden');
+  document.getElementById('vocab-mock-results-area').classList.add('hidden');
+}
+function renderVocabTodayTab(){
+  const weekPool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
+  const minePool = VOCAB_WORDS.filter(w => w.week !== CURRENT_VOCAB_WEEK);
+  const dueCount = minePool.filter(w => daysBetween(getVocabProgress(w.id).nextReview, todayStr()) >= 0).length;
+  const testInfo = VOCAB_TEST_DATE ? formatVocabDate(VOCAB_TEST_DATE) : 'noch nicht eingetragen';
+  document.getElementById('vocab-today-summary').innerHTML =
+    `<strong>📅 Heute üben</strong><br>
+     <span class="journal-sub">${weekPool.length} Wörter aus dieser Woche, ${dueCount} alte Wörter fällig</span><br>
+     <span class="journal-sub">Prüfung: ${testInfo}</span>`;
+}
+function renderVocabWeekTab(){
+  const pool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
+  const counts = vocabStatusCounts(pool);
+  const testInfo = VOCAB_TEST_DATE ? formatVocabDate(VOCAB_TEST_DATE) : 'noch nicht eingetragen';
+  document.getElementById('vocab-week-summary').innerHTML =
+    `<strong>Diese Woche - ${pool.length} Wörter</strong><br>
+     <span class="journal-sub">Prüfung: ${testInfo}</span><br><br>
+     🟢 ${counts.green} sicher &nbsp; 🟡 ${counts.yellow} noch üben &nbsp; 🔴 ${counts.red} schwierig`;
+}
+let vocabMineFilter = 'all';
+function renderVocabMineList(){
+  const q = normalizeVocabAnswer(document.getElementById('vocab-mine-search').value);
+  const list = VOCAB_WORDS.filter(w => {
+    if(vocabMineFilter !== 'all' && vocabStatus(w.id) !== vocabMineFilter) return false;
+    if(!q) return true;
+    return normalizeVocabAnswer(w.en).includes(q) || w.de.some(d => normalizeVocabAnswer(d).includes(q));
+  });
+  const dot = { green:'🟢', yellow:'🟡', red:'🔴' };
+  document.getElementById('vocab-mine-list').innerHTML = list.length ? list.map(w =>
+    `<div class="npc-card" style="padding:8px 10px; margin-bottom:6px;">
+       <div class="npc-lines" style="flex:1;"><strong>${w.en}</strong> <span class="journal-sub">- ${w.de.join(' / ')}</span></div>
+       <span style="font-size:16px;">${dot[vocabStatus(w.id)]}</span>
+       <button class="ghost-btn vocab-mine-play-btn" data-en="${w.en.replace(/"/g,'&quot;')}" style="width:auto; padding:4px 8px;">🔊</button>
+     </div>`
+  ).join('') : `<div class="journal-sub" style="text-align:center;">Keine Wörter gefunden.</div>`;
+  document.querySelectorAll('.vocab-mine-play-btn').forEach(btn => btn.addEventListener('click', () => speakVocabWord(btn.dataset.en)));
+}
+function renderVocabMineTab(){
+  const counts = vocabStatusCounts(VOCAB_WORDS);
+  document.getElementById('vocab-mine-summary').innerHTML =
+    `<strong>Mein Englisch - ${VOCAB_WORDS.length} Wörter gelernt</strong><br>
+     🟢 ${counts.green} sicher &nbsp; 🟡 ${counts.yellow} wiederholen &nbsp; 🔴 ${counts.red} vergessen/unsicher`;
+  renderVocabMineList();
+}
+function showVocabTab(tab){
+  currentVocabTab = tab;
+  hideAllVocabPanels();
+  document.getElementById('vocab-tabs').classList.remove('hidden');
+  document.querySelectorAll('#vocab-tabs .quickbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('vocab-tab-'+tab).classList.remove('hidden');
+  if(tab === 'today') renderVocabTodayTab();
+  else if(tab === 'week') renderVocabWeekTab();
+  else if(tab === 'mine') renderVocabMineTab();
+}
+document.querySelectorAll('#vocab-tabs .quickbtn').forEach(btn => {
+  btn.addEventListener('click', () => showVocabTab(btn.dataset.tab));
+});
+document.getElementById('vocab-mine-search').addEventListener('input', renderVocabMineList);
+document.querySelectorAll('#vocab-mine-filters .quickbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    vocabMineFilter = btn.dataset.filter;
+    document.querySelectorAll('#vocab-mine-filters .quickbtn').forEach(b => b.classList.toggle('active', b===btn));
+    renderVocabMineList();
+  });
+});
+// Startet eine normale Übungsrunde (Heute/Diese Woche/Meine Wörter/gezielte
+// Nachübung nach der Probeprüfung) - eine gemeinsame Engine für alle vier,
+// nur vocabSession.mode unterscheidet den Wortpool (siehe currentVocabPool/
+// pickVocabWord).
+function startVocabPractice(mode, ids){
+  hideAllVocabPanels();
+  document.getElementById('vocab-quiz-area').classList.remove('hidden');
+  vocabSession = { mode, idPool: ids||null, score:0, streak:0, current:null, lastWordId:null, roundAnswered:0, roundCorrect:0 };
+  const labelMap = { today:'📅 Heute', week:`🎯 Diese Woche - Woche ${CURRENT_VOCAB_WEEK}`, mine:'📚 Alte Wörter', ids:'🔁 Wörter aus der Probeprüfung' };
+  document.getElementById('vocab-mode-indicator').textContent = labelMap[mode] || '🔤 Üben';
+  nextVocabQuestion();
+}
+document.getElementById('vocab-today-start-btn').addEventListener('click', () => startVocabPractice('today'));
+document.getElementById('vocab-week-start-btn').addEventListener('click', () => startVocabPractice('week'));
+document.getElementById('vocab-mine-start-btn').addEventListener('click', () => startVocabPractice('mine'));
+document.getElementById('vocab-quiz-back-btn').addEventListener('click', () => showVocabTab(currentVocabTab));
+
+// =====================================================================
+// PROBEPRÜFUNG - eigener, schlankerer Ablauf (Punkt 5): keine Hinweise,
+// keine sofortige Korrektur, keine Wiederholung falscher Wörter innerhalb
+// der Prüfung, zufällige Reihenfolge, ausschliesslich Freitext EN<->DE.
+// =====================================================================
+function startMockExam(){
+  const pool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
+  const questions = pool.slice().sort(() => Math.random()-0.5).map(w => ({
+    word: w, direction: Math.random() < 0.5 ? 'en2de' : 'de2en'
+  }));
+  mockExamSession = { questions, index:0, wrongWords:[] };
+  hideAllVocabPanels();
+  document.getElementById('vocab-mock-exam-area').classList.remove('hidden');
+  renderMockExamQuestion();
+}
+function renderMockExamQuestion(){
+  const { questions, index } = mockExamSession;
+  const total = questions.length;
+  document.getElementById('vocab-exam-progress-label').textContent = `Frage ${index+1}/${total}`;
+  document.getElementById('vocab-exam-progress-fill').style.width = Math.round((index/total)*100) + '%';
+  const { word, direction } = questions[index];
+  document.getElementById('vocab-exam-prompt-lang').textContent = direction==='en2de' ? 'Englisch → Deutsch' : 'Deutsch → Englisch';
+  document.getElementById('vocab-exam-flag-from').textContent = direction==='en2de' ? '🇬🇧' : '🇩🇪';
+  document.getElementById('vocab-exam-flag-to').textContent = direction==='en2de' ? '🇩🇪' : '🇬🇧';
+  document.getElementById('vocab-exam-prompt-word').textContent = direction==='en2de' ? word.en : word.de[0];
+  const input = document.getElementById('vocab-exam-answer-input');
+  input.value=''; input.disabled=false; input.className='answer'; input.focus();
+  document.getElementById('vocab-exam-next-btn').textContent = index+1===total ? 'ABGEBEN ✔️' : 'WEITER →';
+}
+function submitMockExamAnswer(){
+  const input = document.getElementById('vocab-exam-answer-input');
+  if(input.value.trim()==='') return;
+  const { questions, index } = mockExamSession;
+  const { word, direction } = questions[index];
+  const correct = isVocabAnswerCorrect(word, direction, input.value);
+  if(!correct) mockExamSession.wrongWords.push(word);
+  updateVocabMastery(word.id, correct, direction); // bewusst kein sichtbares Feedback, siehe Kommentar oben
+  mockExamSession.index += 1;
+  saveProfile(profile);
+  if(mockExamSession.index >= questions.length){ finishMockExam(); return; }
+  renderMockExamQuestion();
+}
+function finishMockExam(){
+  document.getElementById('vocab-mock-exam-area').classList.add('hidden');
+  const total = mockExamSession.questions.length;
+  const wrongCount = mockExamSession.wrongWords.length;
+  document.getElementById('vocab-mock-result-title').textContent = `Probeprüfung: ${total-wrongCount} / ${total} richtig`;
+  const list = document.getElementById('vocab-mock-wrong-list');
+  const drillBtn = document.getElementById('vocab-mock-drill-wrong-btn');
+  if(wrongCount === 0){
+    list.innerHTML = `<div class="journal-sub" style="text-align:center;">🎉 Alle Wörter richtig!</div>`;
+    drillBtn.classList.add('hidden');
+  } else {
+    list.innerHTML = `<div class="journal-sub" style="margin-bottom:6px;">Diese Wörter solltest du nochmals üben:</div>` +
+      mockExamSession.wrongWords.map(w => `<div class="npc-card" style="padding:6px 10px; margin-bottom:4px;"><div class="npc-lines"><strong>${w.en}</strong> <span class="journal-sub">- ${w.de[0]}</span></div></div>`).join('');
+    drillBtn.classList.remove('hidden');
+  }
+  document.getElementById('vocab-mock-results-area').classList.remove('hidden');
+}
+document.getElementById('vocab-exam-start-btn').addEventListener('click', startMockExam);
+document.getElementById('vocab-exam-next-btn').addEventListener('click', submitMockExamAnswer);
+document.getElementById('vocab-mock-drill-wrong-btn').addEventListener('click', () => {
+  const ids = mockExamSession.wrongWords.map(w => w.id);
+  document.getElementById('vocab-mock-results-area').classList.add('hidden');
+  startVocabPractice('ids', ids);
+});
+document.getElementById('vocab-mock-back-btn').addEventListener('click', () => {
+  document.getElementById('vocab-mock-results-area').classList.add('hidden');
+  showVocabTab(currentVocabTab);
+});
+
+// Einstiegspunkt vom Hauptmenü (🔤 Englisch) - öffnet immer beim Heute-Tab.
+function openVocabHome(){
+  showVocabTab('today');
+}
+function startVocabSession(){
+  showScreen('vocab-screen');
+  openVocabHome();
+}
 document.addEventListener('keydown', (e) => {
   if(e.key !== 'Enter') return;
   const screen = document.getElementById('vocab-screen');
   if(screen.classList.contains('hidden')) return;
-  e.preventDefault();
-  primaryVocabAction();
+  if(!document.getElementById('vocab-mock-exam-area').classList.contains('hidden')){
+    e.preventDefault(); submitMockExamAnswer(); return;
+  }
+  if(!document.getElementById('vocab-quiz-area').classList.contains('hidden')){
+    e.preventDefault(); primaryVocabAction();
+  }
 });
 
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
