@@ -501,6 +501,7 @@
         <button class="quickbtn cat-filter-btn active" data-mode="einmaleins">✖️ Einmaleins</button>
         <button class="quickbtn cat-filter-btn" data-mode="addition">➕ Addition</button>
         <button class="quickbtn cat-filter-btn" data-mode="subtraktion">➖ Subtraktion</button>
+        <button class="quickbtn cat-filter-btn" data-mode="stellenwert">🔢 Stellenwerte</button>
       </div>
 
       <div id="einmaleins-options">
@@ -569,6 +570,7 @@
             <button type="button" class="keypad-btn" data-digit="0">0</button>
             <button type="button" class="keypad-btn" id="keypad-clear">C</button>
           </div>
+          <div class="hidden" id="practice-mc-options" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;"></div>
           <div class="feedback" id="feedback"></div>
           <button class="check-btn" id="check-btn">ZERHAUEN ⛏️</button>
         </div>
@@ -2941,7 +2943,10 @@ function spendMaterial(key, amt){ if(profile.infiniteMaterials) return; profile.
 function materialInfoForQuestion(q){
   if(!q) return null;
   if(q.mode === 'einmaleins') return TABLE_MATERIAL[q.table];
-  const tier = tierByOpType(q.mode);
+  // 'stellenwert' bekommt bewusst kein eigenes Erz/keine eigene Rüstungs-
+  // stufe (das würde die ganze SLOTS×GEAR_TIERS-Matrix/ITEMS-Liste mit
+  // ausrollen müssen) - nutzt einfach dasselbe Erz wie 'addition' mit.
+  const tier = tierByOpType(q.mode === 'stellenwert' ? 'addition' : q.mode);
   if(!tier) return null;
   return { name:tier.name, key:tier.key, color:tier.accent, icon:MATERIAL_EMOJI[tier.key], tier };
 }
@@ -9409,7 +9414,10 @@ const includeGaps = true; // Lückenrechnungen sind jetzt immer gemischt, keine 
 function syncModeTabsUI(){
   document.querySelectorAll('#mode-tabs .quickbtn').forEach(b => b.classList.toggle('active', b.dataset.mode === practiceMode));
   document.getElementById('einmaleins-options').classList.toggle('hidden', practiceMode !== 'einmaleins');
-  document.getElementById('range-options').classList.toggle('hidden', practiceMode === 'einmaleins');
+  // Stellenwerte braucht wie Einmaleins keinen Bereichs-Umschalter (Bis
+  // 100/1000) - die Generatoren wählen den passenden Zahlenraum pro
+  // Teilaufgabe selbst (siehe generateQuestionForMode 'stellenwert').
+  document.getElementById('range-options').classList.toggle('hidden', practiceMode === 'einmaleins' || practiceMode === 'stellenwert');
 }
 document.querySelectorAll('#mode-tabs .quickbtn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -9439,6 +9447,7 @@ const BIG_FACTORS = [20,30,40,50,60,70,80,90];
 // das gesamte Spiel erhalten und wird von der adaptiven Wiederholung genutzt.
 function masteryCategoryFor(q){
   if(q.mode === 'einmaleins') return q.isGap ? 'mult_gap' : ('mult_'+q.table);
+  if(q.mode === 'stellenwert') return 'stw_'+q.subtype;
   const base = q.mode === 'subtraktion' ? 'sub_' : 'add_';
   return q.isGap ? (base+'gap') : (base+q.range);
 }
@@ -9869,8 +9878,10 @@ function renderTrail(containerId){
     return;
   }
   if(session.mode !== 'einmaleins'){
-    // Addition/Subtraktion nutzen genau ein Material für die ganze Sitzung
-    const tier = tierByOpType(session.mode);
+    // Addition/Subtraktion (und jetzt auch Stellenwerte, siehe
+    // materialInfoForQuestion()-Kommentar - dieselbe Alias-Logik) nutzen
+    // genau ein Material für die ganze Sitzung
+    const tier = tierByOpType(session.mode === 'stellenwert' ? 'addition' : session.mode);
     const item = document.createElement('div');
     item.className = 'trail-item active';
     item.innerHTML = `<div class="trail-swatch" style="background-image:url(${blockThumbURL(tier)});background-size:cover;"></div><span class="trail-num">${tier.name}</span>`;
@@ -9947,6 +9958,153 @@ function gapProbabilityForLevel(){
   const level = derivedPlayerLevel();
   return Math.min(0.6, 0.22 + level*0.025);
 }
+
+// =====================================================================
+// STELLENWERTE (neue Übungskategorie, Prüfungsvorbereitung nach "Mathe Fox
+// 4", Kapitel 4.1/4.2 - grosse Zahlen bis zu einer Million). Sechs
+// Teilaufgaben-Typen, pro Frage zufällig gewählt (siehe generateQuestion-
+// ForMode, Zweig 'stellenwert'). Vier davon sind rein numerisch (laufen
+// unverändert durch die bestehende checkAnswer()/den Ziffern-Keypad), zwei
+// sind Multiple Choice (Stellenwert-Name benennen, Zahl->Wort) - bewusst
+// KEINE Texteingabe nötig, siehe Plan/Begründung.
+// =====================================================================
+function formatSwissNumber(n){
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+}
+const STW_ONES = [null,'eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun'];
+const STW_ONES_PREFIX = [null,'ein','zwei','drei','vier','fünf','sechs','sieben','acht','neun']; // vor -hundert/-tausend ("ein-hundert" statt "eins-hundert")
+const STW_TEENS = ['zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'];
+const STW_TENS = [null,null,'zwanzig','dreissig','vierzig','fünfzig','sechzig','siebzig','achtzig','neunzig']; // Schweizer Schreibweise ohne ß
+function stwUnder100ToWords(n){
+  if(n===0) return '';
+  if(n<10) return STW_ONES[n];
+  if(n<20) return STW_TEENS[n-10];
+  const t = Math.floor(n/10), o = n%10;
+  if(o===0) return STW_TENS[t];
+  return (o===1?'ein':STW_ONES[o]) + '-und-' + STW_TENS[t];
+}
+function stwUnder1000ToWords(n){
+  if(n===0) return '';
+  const h = Math.floor(n/100), rem = n%100;
+  if(h===0) return stwUnder100ToWords(rem);
+  const hPart = STW_ONES_PREFIX[h] + '-hundert';
+  return rem===0 ? hPart : hPart+'-'+stwUnder100ToWords(rem);
+}
+// Verifiziert gegen die echten Beispiele aus dem Aufgabenheft-Foto: 4723 ->
+// "vier-tausend-sieben-hundert-drei-und-zwanzig", 53036 -> "drei-und-
+// fünfzig-tausend-sechs-und-dreissig", 7587/79707/3739 ebenso exakt geprüft.
+function numberToGermanWords(n){
+  if(n===0) return 'null';
+  const th = Math.floor(n/1000), rem = n%1000;
+  if(th===0) return stwUnder1000ToWords(rem);
+  const thPart = th===1 ? 'ein-tausend' : stwUnder1000ToWords(th)+'-tausend';
+  return rem===0 ? thPart : thPart+'-'+stwUnder1000ToWords(rem);
+}
+const STW_PLACES = [
+  { exp:0, mult:1,      short:'E',  name:'Einer' },
+  { exp:1, mult:10,     short:'Z',  name:'Zehner' },
+  { exp:2, mult:100,    short:'H',  name:'Hunderter' },
+  { exp:3, mult:1000,   short:'T',  name:'Tausender' },
+  { exp:4, mult:10000,  short:'ZT', name:'Zehntausender' },
+  { exp:5, mult:100000, short:'HT', name:'Hunderttausender' }
+];
+// Zerlegt eine Zahl in ihre Stellenwert-Teile (nur Teile != 0), grösster
+// Teil zuerst - für 'zusammensetzen'/'erweitert'.
+function stwDecompose(n){
+  const s = String(n), parts = [];
+  for(let i=0;i<s.length;i++){
+    const digit = parseInt(s[i],10);
+    if(digit===0) continue;
+    const place = STW_PLACES[s.length-1-i];
+    parts.push({ value: digit*place.mult, digit, place });
+  }
+  return parts;
+}
+function stwShuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+function stwRandomNumber(maxExclusive, minDigits){
+  const min = minDigits ? Math.pow(10, minDigits-1) : 0;
+  return min + Math.floor(Math.random()*(maxExclusive-min));
+}
+function stwGenGrossmal(){
+  let a,b,answer;
+  do {
+    const roundBase = [10,100,1000][Math.floor(Math.random()*3)];
+    const roundFactor = 1+Math.floor(Math.random()*9);
+    const round = roundBase*roundFactor;
+    const small = 2+Math.floor(Math.random()*18); // 2-19
+    const aFirst = Math.random()<0.5;
+    a = aFirst ? small : round; b = aFirst ? round : small;
+    answer = a*b;
+  } while(answer > 999999);
+  return { display:`${formatSwissNumber(a)} · ${formatSwissNumber(b)} = ?`, answer, answerType:'number' };
+}
+function stwGenSkipcount(){
+  const steps = [10,50,100,500,1000,5000,10000,50000,100000];
+  const step = steps[Math.floor(Math.random()*steps.length)];
+  const start = step * (1+Math.floor(Math.random()*90));
+  const n2 = start+step, n3 = start+2*step;
+  return { display:`Zähle weiter: ${formatSwissNumber(start)} → ${formatSwissNumber(n2)} → ?`, answer:n3, answerType:'number' };
+}
+function stwGenZusammensetzen(){
+  const n = stwRandomNumber(999999, 4);
+  const parts = stwShuffle(stwDecompose(n));
+  return { display: parts.map(p => `${p.digit} ${p.place.short}`).join('  '), answer:n, answerType:'number' };
+}
+function stwGenErweitert(){
+  const n = stwRandomNumber(999999, 4);
+  const parts = stwDecompose(n); // grösster Teil zuerst, wie im Heft (nicht gemischt für die Additionskette)
+  return { display: parts.map(p => formatSwissNumber(p.value)).join(' + '), answer:n, answerType:'number' };
+}
+// Plausible falsche Wort-Variante derselben Grössenordnung - für die
+// Multiple-Choice-Richtung "Ziffer -> Wort" (siehe stwGenZahlwort).
+function stwWordDistractor(n){
+  let variant;
+  const kind = Math.floor(Math.random()*3);
+  if(kind===0 && n%100>=20){
+    const tens = Math.floor((n%100)/10), ones = n%100%10;
+    variant = n - (n%100) + ones*10+tens; // Einer/Zehner der letzten Gruppe vertauscht
+  } else if(kind===1){
+    const delta = (Math.random()<0.5?1:-1) * Math.pow(10, Math.floor(Math.random()*3));
+    variant = Math.max(1, n+delta);
+  } else {
+    variant = Math.max(1, n + (Math.random()<0.5?100:-100));
+  }
+  return numberToGermanWords(Math.round(variant));
+}
+function stwGenZahlwort(){
+  const n = stwRandomNumber(99999, 3);
+  const words = numberToGermanWords(n);
+  if(Math.random()<0.5){
+    // Wort -> Ziffer: bleibt eine ganz normale numerische Frage, der
+    // bestehende Ziffern-Keypad passt direkt.
+    return { display: words.split('-').join(' '), answer:n, answerType:'number' };
+  }
+  // Ziffer -> Wort: Multiple Choice statt Texteingabe (siehe Plan-Begründung).
+  const distractors = new Set(); let attempts = 0;
+  while(distractors.size<3 && attempts<30){ attempts++; const v = stwWordDistractor(n); if(v && v!==words) distractors.add(v); }
+  let fallback = n; while(distractors.size<3){ fallback += 7; distractors.add(numberToGermanWords(fallback)); }
+  const options = stwShuffle([words, ...Array.from(distractors).slice(0,3)]);
+  return { display: formatSwissNumber(n), answer: words, answerType:'mc', options };
+}
+function stwGenName(){
+  const n = stwRandomNumber(999999, 3);
+  const digitsStr = String(n);
+  const idx = Math.floor(Math.random()*digitsStr.length);
+  const correctPlace = STW_PLACES[digitsStr.length-1-idx];
+  let display = '';
+  for(let i=0;i<digitsStr.length;i++){
+    const fromRight = digitsStr.length-1-i;
+    if(i>0 && fromRight%3===2) display += "'";
+    display += (i===idx) ? `<span style="text-decoration:underline; color:var(--gold);">${digitsStr[i]}</span>` : digitsStr[i];
+  }
+  const distractors = stwShuffle(STW_PLACES.filter(p => p.exp !== correctPlace.exp).map(p=>p.name)).slice(0,3);
+  const options = stwShuffle([correctPlace.name, ...distractors]);
+  return { display, answer: correctPlace.name, answerType:'mc', options };
+}
 function generateQuestionForMode(mode){
   if(mode === 'einmaleins'){
     const table = session.tables[Math.floor(Math.random() * session.tables.length)];
@@ -9967,6 +10125,17 @@ function generateQuestionForMode(mode){
       display = `${table} × ${factor} = ?`; answer = product;
     }
     return { mode:'einmaleins', table, factor, answer, extended, isGap, display, key: table+'x'+factor+(isGap?'g':'') };
+  }
+  if(mode === 'stellenwert'){
+    const subtypes = ['grossmal','skipcount','zusammensetzen','erweitert','zahlwort','name'];
+    const subtype = subtypes[Math.floor(Math.random()*subtypes.length)];
+    const g = subtype==='grossmal' ? stwGenGrossmal()
+      : subtype==='skipcount' ? stwGenSkipcount()
+      : subtype==='zusammensetzen' ? stwGenZusammensetzen()
+      : subtype==='erweitert' ? stwGenErweitert()
+      : subtype==='zahlwort' ? stwGenZahlwort()
+      : stwGenName();
+    return { mode:'stellenwert', subtype, answer:g.answer, answerType:g.answerType, options:g.options, display:g.display, key:'stw_'+subtype+'_'+String(g.answer) };
   }
   const isSub = mode === 'subtraktion';
   const max = practiceRange;
@@ -10026,9 +10195,26 @@ function nextQuestion(){
   updatePracticeMaterialBadge(mat.tier);
 
   const input = document.getElementById('answer-input');
-  input.value=''; input.className='answer'; input.disabled=false; input.focus();
-  document.getElementById('check-btn').textContent = 'ZERHAUEN ⛏️';
-  document.getElementById('check-btn').disabled = false;
+  const keypad = document.getElementById('answer-keypad');
+  const mcArea = document.getElementById('practice-mc-options');
+  const checkBtn = document.getElementById('check-btn');
+  input.value=''; input.className='answer'; input.disabled=false;
+  checkBtn.textContent = 'ZERHAUEN ⛏️';
+  checkBtn.disabled = false;
+  if(q.answerType === 'mc'){
+    // Stellenwerte-Teilaufgaben mit Wort-/Namens-Antwort (siehe stwGenName/
+    // stwGenZahlwort): Multiple Choice statt Ziffern-Keypad, kein direktes
+    // Tippen nötig - siehe Plan-Begründung (Eingabefeld ist bewusst
+    // ziffernonly, inputmode="none").
+    input.classList.add('hidden'); keypad.classList.add('hidden'); checkBtn.classList.add('hidden');
+    mcArea.innerHTML = q.options.map(opt => `<button class="quickbtn practice-mc-btn vocab-mc-btn" data-value="${String(opt).replace(/"/g,'&quot;')}">${opt}</button>`).join('');
+    mcArea.classList.remove('hidden');
+    mcArea.querySelectorAll('.practice-mc-btn').forEach(btn => btn.addEventListener('click', () => handlePracticeMcAnswer(btn)));
+  } else {
+    input.classList.remove('hidden'); keypad.classList.remove('hidden'); checkBtn.classList.remove('hidden');
+    mcArea.classList.add('hidden'); mcArea.innerHTML = '';
+    input.focus();
+  }
   renderTrail('trail');
 }
 
@@ -10047,7 +10233,12 @@ function primaryAction(){
 function checkAnswer(){
   const question = session.current;
   const input = document.getElementById('answer-input');
-  const val = parseInt(input.value, 10);
+  // Stellenwerte-Multiple-Choice-Fragen haben eine Text-Antwort (Stellenwert-
+  // Name oder Zahlwort) statt einer Zahl - siehe stwGenName/stwGenZahlwort
+  // und handlePracticeMcAnswer(). Für alle anderen (bestehenden wie neuen
+  // numerischen) Fragen bleibt exakt der bisherige parseInt-Vergleich.
+  const isTextAnswer = typeof question.answer === 'string';
+  const val = isTextAnswer ? input.value : parseInt(input.value, 10);
   let stat = null, learningStat = null;
   if(!session.isFinalChallenge && !session.isPetEncounter && !session.isPetTaming){
     if(question.mode === 'einmaleins'){
@@ -10117,6 +10308,28 @@ function checkAnswer(){
 }
 const PRAISE = ['Super!','Klasse!','Genau richtig!','Stark abgebaut!','Treffer!','Perfekt!'];
 function pickPraise(){ return PRAISE[Math.floor(Math.random()*PRAISE.length)]; }
+// Klick auf eine Stellenwerte-Multiple-Choice-Option: befüllt das (versteckte)
+// answer-input mit dem exakten Optionstext und ruft die UNVERÄNDERTE
+// checkAnswer() auf - läuft dadurch automatisch durch dieselbe Punkte-/
+// Mastery-/Mining-Logik wie jede normale Frage (siehe Plan-Begründung).
+function handlePracticeMcAnswer(btn){
+  if(awaitingNext) return; // Doppelklick-/Doppeltipp-Schutz
+  document.querySelectorAll('#practice-mc-options .practice-mc-btn').forEach(b => b.disabled = true);
+  const input = document.getElementById('answer-input');
+  input.value = btn.dataset.value;
+  checkAnswer();
+  // checkAnswer() setzt input.className komplett neu ('answer correct'/
+  // 'answer wrong') - das entfernt dabei die 'hidden'-Klasse wieder, die
+  // nextQuestion() für MC-Fragen gesetzt hatte. Feld bleibt bei MC-Fragen
+  // unsichtbar (die Antwort kommt ja über die Buttons, nicht per Tippen).
+  input.classList.add('hidden');
+  const correct = btn.dataset.value === session.current.answer;
+  btn.classList.add(correct ? 'vocab-mc-correct' : 'vocab-mc-wrong'); // wiederverwendet dieselben Farben wie beim Vokabeltrainer
+  if(!correct){
+    document.querySelectorAll('#practice-mc-options .practice-mc-btn').forEach(b => { if(b.dataset.value === session.current.answer) b.classList.add('vocab-mc-correct'); });
+  }
+  document.getElementById('check-btn').classList.remove('hidden');
+}
 
 document.getElementById('check-btn').addEventListener('click', primaryAction);
 document.addEventListener('keydown', (e) => {
