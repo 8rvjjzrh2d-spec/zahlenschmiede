@@ -10160,13 +10160,16 @@ document.getElementById('abort-btn').addEventListener('click', () => {
 // updateMastery() für Mathe. Beliebig oft wiederholbar (keine feste Länge),
 // schwächere Wörter werden per Gewichtung häufiger gefragt (siehe pickVocabWord).
 // =====================================================================
-// Jedes Wort trägt eine "week" (Schul-Wochennummer, entspricht der
-// Reihenfolge, in der neue Vokabellisten reinkommen - nicht zwingend die
-// Kalenderwoche). Der Tab "Diese Woche"/die Probeprüfung nutzen NUR die
-// Wörter mit week===CURRENT_VOCAB_WEEK, "Meine Wörter" alle anderen.
-// CURRENT_VOCAB_WEEK muss bei jeder neuen Wochenliste zusammen mit den
-// neuen Einträgen aktualisiert werden, sonst zeigen "Diese Woche"/
-// Probeprüfung/"Heute" weiterhin die alte Woche an.
+// Jedes Wort trägt eine "week" (Schul-Wochennummer - pro Prüfung, nicht
+// zwingend die Kalenderwoche; laut Nutzer werden immer nur 10 Wörter pro
+// Woche geprüft, daher kann eine einzelne fotografierte Schulbuch-Liste auf
+// mehrere "week"-Werte aufgeteilt sein, siehe z.B. week:3 unten). Der Tab
+// "Diese Woche"/die Probeprüfung nutzen NUR week===CURRENT_VOCAB_WEEK,
+// "Meine Wörter" nur ECHT VERGANGENE Wochen (week<CURRENT_VOCAB_WEEK) -
+// schon im Katalog stehende, aber noch nicht drangewesene ZUKÜNFTIGE Wochen
+// (week>CURRENT_VOCAB_WEEK) tauchen bewusst nirgends auf, bis sie dran sind.
+// CURRENT_VOCAB_WEEK muss bei jeder neuen Prüfungswoche aktualisiert werden,
+// sonst zeigen "Diese Woche"/Probeprüfung/"Heute" weiterhin die alte Woche an.
 const CURRENT_VOCAB_WEEK = 2;
 const VOCAB_WORDS = [
   { id:'sense', en:'sense', de:['Sinn'], week:1 },
@@ -10179,8 +10182,12 @@ const VOCAB_WORDS = [
   { id:'fair', en:'fair', de:['Jahrmarkt','Chilbi'], week:1 },
   { id:'loud_noise', en:'loud noise', de:['lautes Geräusch','Lärm'], week:1 },
   { id:'mild_or_hot_curry', en:'mild or hot curry', de:['mildes oder scharfes Curry'], week:1 },
-  // Class vocabulary Unit 1, Woche 2 (Testumfang für die nächste Prüfung) -
-  // Fortsetzung der Liste oben, gleiche Quelle (Schulbuch-Vokabelliste).
+  // Class vocabulary Unit 1, Woche 2 (Testumfang für die nächste Prüfung,
+  // per Nutzer bestätigt: "von crunchy biscuits bis aromatic") - genau 10
+  // Wörter, da jede Woche nur 10 Wörter geprüft werden. 'crunchy_biscuits'
+  // fehlte in der vorherigen Übertragung (Übertragungsfehler, jetzt
+  // nachgetragen - stand im Originalfoto direkt nach 'mild or hot curry').
+  { id:'crunchy_biscuits', en:'crunchy biscuits', de:['knusprige Biskuits','Kekse'], week:2 },
   { id:'candyfloss', en:'candyfloss', de:['Zuckerwatte'], week:2 },
   { id:'toffee', en:'toffee', de:['Caramelbonbon'], week:2 },
   { id:'sticky_candy', en:'sticky candy', de:['klebrige Süssigkeiten','Bonbons'], week:2 },
@@ -10190,17 +10197,19 @@ const VOCAB_WORDS = [
   { id:'crack', en:'crack', de:['krachen'], week:2 },
   { id:'sweet_or_sour_apples', en:'sweet or sour apples', de:['süsse oder saure Äpfel'], week:2 },
   { id:'aromatic', en:'aromatic', de:['aromatisch','würzig'], week:2 },
-  { id:'bitter', en:'bitter', de:['bitter'], week:2 },
-  { id:'fruity', en:'fruity', de:['fruchtig'], week:2 },
-  { id:'fresh_vegetables', en:'fresh vegetables', de:['frisches Gemüse'], week:2 },
-  { id:'a_piece_of_cheese', en:'a piece of cheese', de:['ein Stück Käse'], week:2 },
-  { id:'i_like_because', en:'I like ... because ...', de:['Ich mag ..., weil ...'], week:2 },
-  { id:'i_dont_like_because', en:"I don't like ... because ...", de:['Ich mag ... nicht, weil ...'], week:2 },
-  { id:'it_looks', en:'It looks ...', de:['Es sieht ... aus.'], week:2 },
-  { id:'it_sounds', en:'It sounds ...', de:['Es tönt ...'], week:2 },
-  { id:'it_tastes_too', en:'It tastes too ...', de:['Es schmeckt zu ...'], week:2 },
-  { id:'favourite_product', en:'favourite product', de:['Lieblingsprodukt'], week:2 },
-  { id:'result', en:'result', de:['Resultat','Ergebnis'], week:2 }
+  // Woche 3 (noch nicht dran - restliche Wörter aus derselben Schulbuchliste,
+  // folgen erst in einer späteren Prüfungswoche).
+  { id:'bitter', en:'bitter', de:['bitter'], week:3 },
+  { id:'fruity', en:'fruity', de:['fruchtig'], week:3 },
+  { id:'fresh_vegetables', en:'fresh vegetables', de:['frisches Gemüse'], week:3 },
+  { id:'a_piece_of_cheese', en:'a piece of cheese', de:['ein Stück Käse'], week:3 },
+  { id:'i_like_because', en:'I like ... because ...', de:['Ich mag ..., weil ...'], week:3 },
+  { id:'i_dont_like_because', en:"I don't like ... because ...", de:['Ich mag ... nicht, weil ...'], week:3 },
+  { id:'it_looks', en:'It looks ...', de:['Es sieht ... aus.'], week:3 },
+  { id:'it_sounds', en:'It sounds ...', de:['Es tönt ...'], week:3 },
+  { id:'it_tastes_too', en:'It tastes too ...', de:['Es schmeckt zu ...'], week:3 },
+  { id:'favourite_product', en:'favourite product', de:['Lieblingsprodukt'], week:3 },
+  { id:'result', en:'result', de:['Resultat','Ergebnis'], week:3 }
 ];
 function normalizeVocabAnswer(str){
   return String(str||'').trim().toLowerCase().replace(/\s+/g,' ').replace(/[.,!?]+$/,'');
@@ -10329,9 +10338,19 @@ function weightedVocabPick(pool, weightFn, excludeId){
   } while(pool.length > 1 && word.id === excludeId);
   return word;
 }
-// vocabSession.mode: 'week' (nur CURRENT_VOCAB_WEEK), 'mine' (alle anderen
-// Wochen), 'today' (Mischpool, siehe unten), 'ids' (expliziter Wort-ID-Pool,
-// z.B. die falschen Wörter nach einer Probeprüfung).
+// Wörter aus Wochen, die schon eingeführt wurden (vergangene + aktuelle
+// Woche) - schliesst zukünftige, noch nicht dran gewesene Wochen aus (z.B.
+// week:3-Einträge, die schon im Katalog stehen, aber erst später geübt
+// werden sollen). Genutzt für alles, was "was das Kind bisher kennengelernt
+// hat" zeigen/durchsuchen soll (Meine Wörter).
+function learnedVocabWords(){
+  return VOCAB_WORDS.filter(w => w.week <= CURRENT_VOCAB_WEEK);
+}
+// vocabSession.mode: 'week' (nur CURRENT_VOCAB_WEEK), 'mine' (nur ECHT
+// VERGANGENE Wochen, week < CURRENT_VOCAB_WEEK - schliesst sowohl die
+// aktuelle als auch etwaige schon im Katalog stehende ZUKÜNFTIGE Wochen aus),
+// 'today' (Mischpool, siehe unten), 'ids' (expliziter Wort-ID-Pool, z.B. die
+// falschen Wörter nach einer Probeprüfung).
 function currentVocabPool(){
   const mode = vocabSession && vocabSession.mode;
   if(mode === 'ids'){
@@ -10339,7 +10358,7 @@ function currentVocabPool(){
     return pool.length ? pool : VOCAB_WORDS;
   }
   if(mode === 'mine'){
-    const pool = VOCAB_WORDS.filter(w => w.week !== CURRENT_VOCAB_WEEK);
+    const pool = VOCAB_WORDS.filter(w => w.week < CURRENT_VOCAB_WEEK);
     return pool.length ? pool : VOCAB_WORDS;
   }
   const pool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
@@ -10349,7 +10368,7 @@ function pickVocabWord(excludeId){
   const mode = vocabSession && vocabSession.mode;
   if(mode === 'today'){
     const weekPool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
-    const minePool = VOCAB_WORDS.filter(w => w.week !== CURRENT_VOCAB_WEEK);
+    const minePool = VOCAB_WORDS.filter(w => w.week < CURRENT_VOCAB_WEEK);
     const useWeek = minePool.length === 0 || Math.random() < vocabWeekShareToday();
     if(useWeek && weekPool.length) return weightedVocabPick(weekPool, vocabWeight, excludeId);
     if(minePool.length) return weightedVocabPick(minePool, vocabCombinedWeight, excludeId);
@@ -10560,7 +10579,7 @@ function hideAllVocabPanels(){
 }
 function renderVocabTodayTab(){
   const weekPool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
-  const minePool = VOCAB_WORDS.filter(w => w.week !== CURRENT_VOCAB_WEEK);
+  const minePool = VOCAB_WORDS.filter(w => w.week < CURRENT_VOCAB_WEEK);
   const dueCount = minePool.filter(w => daysBetween(getVocabProgress(w.id).nextReview, todayStr()) >= 0).length;
   const testInfo = formatVocabDate(getVocabTestDate());
   document.getElementById('vocab-today-summary').innerHTML =
@@ -10580,7 +10599,7 @@ function renderVocabWeekTab(){
 let vocabMineFilter = 'all';
 function renderVocabMineList(){
   const q = normalizeVocabAnswer(document.getElementById('vocab-mine-search').value);
-  const list = VOCAB_WORDS.filter(w => {
+  const list = learnedVocabWords().filter(w => {
     if(vocabMineFilter !== 'all' && vocabStatus(w.id) !== vocabMineFilter) return false;
     if(!q) return true;
     return normalizeVocabAnswer(w.en).includes(q) || w.de.some(d => normalizeVocabAnswer(d).includes(q));
@@ -10596,9 +10615,10 @@ function renderVocabMineList(){
   document.querySelectorAll('.vocab-mine-play-btn').forEach(btn => btn.addEventListener('click', () => speakVocabWord(btn.dataset.en)));
 }
 function renderVocabMineTab(){
-  const counts = vocabStatusCounts(VOCAB_WORDS);
+  const learned = learnedVocabWords();
+  const counts = vocabStatusCounts(learned);
   document.getElementById('vocab-mine-summary').innerHTML =
-    `<strong>Mein Englisch - ${VOCAB_WORDS.length} Wörter gelernt</strong><br>
+    `<strong>Mein Englisch - ${learned.length} Wörter gelernt</strong><br>
      🟢 ${counts.green} sicher &nbsp; 🟡 ${counts.yellow} wiederholen &nbsp; 🔴 ${counts.red} vergessen/unsicher`;
   renderVocabMineList();
 }
