@@ -8905,18 +8905,34 @@ function setupJoystick(baseId, knobId){
   const base = document.getElementById(baseId);
   const knob = document.getElementById(knobId);
   if(!base || !knob) return;
-  let dragging = false;
+  // Bugreport: beim gleichzeitigen Bewegen (Stick, ein Finger) UND Kamera-
+  // Drehen (zweiter Finger, siehe engineRenderer.domElement-Handler weiter
+  // oben - der macht es schon richtig) "vergaß" der Stick den ersten Finger,
+  // sobald der zweite losgelassen wurde. Ursache: statt der Identität des
+  // konkreten Fingers (e.pointerId) wurde nur ein einzelnes globales
+  // dragging-Flag geführt, und pointerup/pointermove liefen auf `window` für
+  // JEDEN Pointer - ein zweiter Finger (Kamera) hat dadurch den Stick
+  // mitgesteuert bzw. beim Loslassen fälschlich zurückgesetzt. Jetzt wie bei
+  // der Kamera-Steuerung: die ID des Fingers merken, der den Stick zuerst
+  // berührt hat (setPointerCapture bindet alle seine weiteren Events fix an
+  // `base`, auch wenn er über den Stick-Rand hinausrutscht), und jeden
+  // anderen Pointer komplett ignorieren, bis dieser eine losgelassen wird.
+  let activePointerId = null;
   const stop = () => {
-    dragging = false;
+    activePointerId = null;
     knob.style.left = '27px'; knob.style.top = '27px';
     // Der eigentliche Bug: moveInput wurde hier nie zurückgesetzt, wodurch
     // sich der Charakter nach dem Loslassen unbegrenzt in die zuletzt
     // gezogene Richtung weiterbewegte, statt stehen zu bleiben.
     moveInput.x = 0; moveInput.z = 0;
   };
-  base.addEventListener('pointerdown', (e) => { dragging = true; });
-  window.addEventListener('pointermove', (e) => {
-    if(!dragging) return;
+  base.addEventListener('pointerdown', (e) => {
+    if(activePointerId !== null) return; // Stick wird schon von einem anderen Finger gehalten
+    activePointerId = e.pointerId;
+    try{ base.setPointerCapture(e.pointerId); } catch(err){}
+  });
+  base.addEventListener('pointermove', (e) => {
+    if(e.pointerId !== activePointerId) return; // fremder Finger (z.B. Kamera-Drehen) - ignorieren
     const rect = base.getBoundingClientRect();
     const cx = rect.left+rect.width/2, cy = rect.top+rect.height/2;
     let dx = e.clientX-cx, dy = e.clientY-cy;
@@ -8927,8 +8943,9 @@ function setupJoystick(baseId, knobId){
     knob.style.left = (27+dx)+'px'; knob.style.top = (27+dy)+'px';
     moveInput.x = dx/maxR; moveInput.z = dy/maxR;
   });
-  window.addEventListener('pointerup', stop);
-  window.addEventListener('pointercancel', stop); // z.B. bei Browser-Gesten-Unterbrechung - sonst bliebe dragging haengen
+  const onPointerEnd = (e) => { if(e.pointerId === activePointerId) stop(); };
+  base.addEventListener('pointerup', onPointerEnd);
+  base.addEventListener('pointercancel', onPointerEnd); // z.B. bei Browser-Gesten-Unterbrechung - sonst bliebe activePointerId haengen
 }
 setupJoystick('explore-joystick', 'explore-joystick-knob');
 // Auf dem Desktop steuert man mit WASD (siehe Tastatur-Listener) - der
