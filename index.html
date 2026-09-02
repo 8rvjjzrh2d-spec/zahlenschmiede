@@ -374,6 +374,13 @@
      tatsächlichen Inhalt). resize:none, damit keine Ecke zum manuellen
      Ziehen erscheint - die Grösse ist ohnehin automatisch. */
   #vocab-answer-input, #vocab-exam-answer-input{ width:100%; max-width:100%; box-sizing:border-box; min-height:54px; line-height:1.4; resize:none; overflow:hidden; }
+  /* Auf Touch-Geräten (siehe body.touch-device, IS_TOUCH_DEVICE) schreibt sie
+     mit dem Apple Pencil per Scribble statt zu tippen - dafür braucht es
+     deutlich mehr Platz als eine einzeilige Tippzeile, sonst ist beim
+     Schreiben sofort der Rand erreicht. min-height wirkt als Untergrenze,
+     autoSizeVocabInput() darf das Feld bei Bedarf (lange Antworten) trotzdem
+     noch weiter wachsen lassen. */
+  body.touch-device #vocab-answer-input, body.touch-device #vocab-exam-answer-input{ min-height:170px; }
 
   .feedback{ min-height: 24px; font-weight: 800; font-size: 15px; margin: 14px 0 6px; }
   .feedback.correct{ color: #8de892; }
@@ -8954,6 +8961,12 @@ setupJoystick('explore-joystick', 'explore-joystick-knob');
 // Bildschirm-Stick braucht dort nur unnötig Platz und wird deshalb nur auf
 // echten Touch-Geräten (Tablet/Handy) überhaupt eingeblendet.
 const IS_TOUCH_DEVICE = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+// Für Scribble (Handschrift mit dem Apple Pencil, siehe Vokabel-Antwortfelder
+// weiter unten) braucht es einen deutlich grösseren Schreibbereich als beim
+// Tippen - eine Body-Klasse statt einer eigenen CSS-Media-Query, damit
+// dieselbe Touch-Erkennung wie überall sonst im Spiel (z.B. Bildschirm-Stick)
+// verwendet wird, nicht eine zweite, potenziell abweichende Heuristik.
+if(IS_TOUCH_DEVICE) document.body.classList.add('touch-device');
 function enterExploreMode(){
   exploreMode = true;
   lastExploreT = null;
