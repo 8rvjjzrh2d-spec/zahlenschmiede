@@ -600,7 +600,8 @@
       <div class="journal-quest" id="vocab-week-summary" style="text-align:center;"></div>
       <button class="primary-btn" id="vocab-week-start-btn" style="max-width:340px; margin:12px auto 0; display:block;">▶️ JETZT ÜBEN</button>
       <button class="ghost-btn" id="vocab-power-start-btn" style="max-width:340px; margin:8px auto 0; display:block; border:2px solid var(--ink); border-radius:8px;">⚡ POWER-TRAINING</button>
-      <div class="account-sub" style="text-align:center; margin-top:6px;">Nur Deutsch → Englisch tippen, ohne Multiple Choice/Hören - schnell, genau wie in der Prüfung</div>
+      <div class="account-sub" id="vocab-power-stats" style="text-align:center; margin-top:6px;"></div>
+      <div class="account-sub" style="text-align:center;">Wort wird nur auf Deutsch vorgelesen, nicht angezeigt - du tippst die englische Übersetzung. Genau das Prüfungsformat, ohne Umwege.</div>
     </div>
 
     <div class="hidden" id="vocab-tab-mine">
@@ -619,7 +620,7 @@
     <div class="hidden" id="vocab-tab-exam">
       <div class="journal-quest" style="text-align:center;">
         📝 <strong>Probeprüfung</strong><br>
-        <span class="journal-sub">Nur die Wörter dieser Woche, nur Deutsch → Englisch, zufällige Reihenfolge, keine Hinweise und keine Korrektur während der Prüfung - genau wie beim echten Test.</span>
+        <span class="journal-sub">Nur die Wörter dieser Woche, wie in der echten Prüfung: das Wort wird nur auf Deutsch VORGELESEN, nicht angezeigt - du schreibst die englische Übersetzung. Zufällige Reihenfolge, keine Hinweise, keine Korrektur während der Prüfung.</span>
       </div>
       <button class="primary-btn" id="vocab-exam-start-btn" style="max-width:340px; margin:12px auto 0; display:block;">▶️ PROBEPRÜFUNG STARTEN</button>
     </div>
@@ -667,6 +668,7 @@
           </div>
           <div class="pixel-label" id="vocab-exam-prompt-lang">Englisch → Deutsch</div>
           <div class="equation" id="vocab-exam-prompt-word">word</div>
+          <button class="ghost-btn hidden" id="vocab-exam-play-btn" style="font-size:36px; padding:8px; border:2px solid var(--ink); border-radius:50%; width:64px; height:64px; margin:0 auto 8px;">🔊</button>
           <textarea class="answer" id="vocab-exam-answer-input" rows="1" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
           <button class="check-btn" id="vocab-exam-next-btn">WEITER →</button>
         </div>
@@ -10490,6 +10492,19 @@ function vocabStatusCounts(pool){
   pool.forEach(w => counts[vocabStatus(w.id)]++);
   return counts;
 }
+// Für Power-Training (Punkt "Anzeige, wieviele Wörter schon geübt wurden und
+// wieviel sie schon gut kann"): "geübt" = mindestens einmal beantwortet
+// (unterscheidet sich von vocabStatusCounts()/🟡, das auch NIE geübte Wörter
+// mit neutralem Start-Mastery 50 als "gelb" zählt) - "gut" = Mastery >= 70.
+function vocabPracticeCounts(pool){
+  let practiced = 0, good = 0;
+  pool.forEach(w => {
+    const p = getVocabProgress(w.id);
+    if(p.correct + p.wrong > 0) practiced++;
+    if(p.mastery >= 70) good++;
+  });
+  return { total: pool.length, practiced, good };
+}
 function daysBetween(dateStrA, dateStrB){
   return Math.round((new Date(dateStrB+'T00:00:00') - new Date(dateStrA+'T00:00:00')) / 86400000);
 }
@@ -10659,13 +10674,18 @@ function pickExerciseType(word, mode){
 }
 // Browser-eigene Sprachausgabe statt Audio-Assets - kein Server/Speicher
 // nötig, funktioniert direkt auf der gehosteten Seite. Britisches Englisch
-// passend zum Schulbuch-Vokabular (z.B. "Chilbi"/"Caramelbonbon").
-function speakVocabWord(text){
+// als Standard, passend zum Schulbuch-Vokabular (z.B. "Chilbi"/
+// "Caramelbonbon") - lang optional überschreibbar (z.B. 'de-DE' fürs
+// Vorlesen der deutschen Wörter bei Probeprüfung/Power-Training, siehe
+// dort: die echte Prüfung liest die Lehrerin die Wörter NUR auf Deutsch
+// vor, das Kind schreibt nur die englische Übersetzung - kein gedrucktes
+// deutsches Wort).
+function speakVocabWord(text, lang){
   try {
     if(!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-GB'; u.rate = 0.85;
+    u.lang = lang || 'en-GB'; u.rate = 0.85;
     window.speechSynthesis.speak(u);
   } catch(e){ /* Sprachausgabe ist ein Extra, kein Blocker für die Übung */ }
 }
@@ -10749,13 +10769,26 @@ function nextVocabQuestion(){
   input.value=''; input.className='answer'; input.disabled=false;
   autoSizeVocabInput(input);
 
-  if(exerciseType === 'spelling'){
+  if(vocabSession.mode === 'power'){
+    // Power-Training bildet das ECHTE Prüfungsformat nach (laut Nutzer:
+    // die Lehrerin liest das Wort nur auf Deutsch vor, geschrieben wird nur
+    // die englische Übersetzung) - deshalb bewusst KEIN gedrucktes
+    // deutsches Wort, nur die Sprachausgabe, beliebig oft wiederholbar.
+    document.getElementById('vocab-prompt-lang').textContent = '🔊 Hör zu (Deutsch) und tippe die englische Übersetzung';
+    document.getElementById('vocab-flag-from').textContent = '🔊';
+    document.getElementById('vocab-flag-to').textContent = '🇬🇧';
+    promptWord.classList.add('hidden');
+    playBtn.classList.remove('hidden');
+    playBtn.dataset.audioText = word.de[0]; playBtn.dataset.audioLang = 'de-DE';
+    speakVocabWord(word.de[0], 'de-DE');
+  } else if(exerciseType === 'spelling'){
     document.getElementById('vocab-prompt-lang').textContent = '🔊 Hör zu und tippe das Wort';
     document.getElementById('vocab-flag-from').textContent = '🔊';
     document.getElementById('vocab-flag-to').textContent = '🇬🇧';
     promptWord.classList.add('hidden');
     playBtn.classList.remove('hidden');
-    speakVocabWord(word.en);
+    playBtn.dataset.audioText = word.en; playBtn.dataset.audioLang = 'en-GB';
+    speakVocabWord(word.en, 'en-GB');
   } else {
     document.getElementById('vocab-prompt-lang').textContent = direction === 'en2de' ? 'Englisch → Deutsch' : 'Deutsch → Englisch';
     document.getElementById('vocab-flag-from').textContent = direction === 'en2de' ? '🇬🇧' : '🇩🇪';
@@ -10835,8 +10868,9 @@ function primaryVocabAction(){
   } finally { vocabActionLock = false; }
 }
 document.getElementById('vocab-check-btn').addEventListener('click', primaryVocabAction);
-document.getElementById('vocab-spelling-play-btn').addEventListener('click', () => {
-  if(vocabSession && vocabSession.current) speakVocabWord(vocabSession.current.word.en);
+document.getElementById('vocab-spelling-play-btn').addEventListener('click', (e) => {
+  const btn = e.currentTarget;
+  if(btn.dataset.audioText) speakVocabWord(btn.dataset.audioText, btn.dataset.audioLang);
 });
 
 // =====================================================================
@@ -10867,6 +10901,9 @@ function renderVocabWeekTab(){
     `<strong>Diese Woche - ${pool.length} Wörter</strong><br>
      <span class="journal-sub">Prüfung: ${testInfo}</span><br><br>
      🟢 ${counts.green} sicher &nbsp; 🟡 ${counts.yellow} noch üben &nbsp; 🔴 ${counts.red} schwierig`;
+  const pc = vocabPracticeCounts(pool);
+  document.getElementById('vocab-power-stats').textContent =
+    `${pc.practiced} von ${pc.total} Wörtern schon geübt - ${pc.good} davon schon sicher gekonnt`;
 }
 let vocabMineFilter = 'all';
 function renderVocabMineList(){
@@ -10957,10 +10994,27 @@ function renderMockExamQuestion(){
   document.getElementById('vocab-exam-progress-label').textContent = `Frage ${index+1}/${total}`;
   document.getElementById('vocab-exam-progress-fill').style.width = Math.round((index/total)*100) + '%';
   const { word, direction } = questions[index];
-  document.getElementById('vocab-exam-prompt-lang').textContent = direction==='en2de' ? 'Englisch → Deutsch' : 'Deutsch → Englisch';
-  document.getElementById('vocab-exam-flag-from').textContent = direction==='en2de' ? '🇬🇧' : '🇩🇪';
-  document.getElementById('vocab-exam-flag-to').textContent = direction==='en2de' ? '🇩🇪' : '🇬🇧';
-  document.getElementById('vocab-exam-prompt-word').textContent = direction==='en2de' ? word.en : word.de[0];
+  const promptWord = document.getElementById('vocab-exam-prompt-word');
+  const playBtn = document.getElementById('vocab-exam-play-btn');
+  if(direction === 'de2en'){
+    // Echtes Prüfungsformat (laut Nutzer): die Lehrerin liest nur vor, es
+    // steht nirgends geschrieben - deshalb hier bewusst KEIN Text, nur die
+    // Sprachausgabe, beliebig oft per Button wiederholbar.
+    document.getElementById('vocab-exam-prompt-lang').textContent = '🔊 Hör zu (Deutsch) und schreib die englische Übersetzung';
+    document.getElementById('vocab-exam-flag-from').textContent = '🔊';
+    document.getElementById('vocab-exam-flag-to').textContent = '🇬🇧';
+    promptWord.classList.add('hidden');
+    playBtn.classList.remove('hidden');
+    playBtn.dataset.audioText = word.de[0]; playBtn.dataset.audioLang = 'de-DE';
+    speakVocabWord(word.de[0], 'de-DE');
+  } else {
+    document.getElementById('vocab-exam-prompt-lang').textContent = 'Englisch → Deutsch';
+    document.getElementById('vocab-exam-flag-from').textContent = '🇬🇧';
+    document.getElementById('vocab-exam-flag-to').textContent = '🇩🇪';
+    promptWord.classList.remove('hidden');
+    promptWord.textContent = word.en;
+    playBtn.classList.add('hidden');
+  }
   const input = document.getElementById('vocab-exam-answer-input');
   input.value=''; input.disabled=false; input.className='answer'; input.focus();
   autoSizeVocabInput(input);
@@ -10998,6 +11052,10 @@ function finishMockExam(){
 }
 document.getElementById('vocab-exam-start-btn').addEventListener('click', startMockExam);
 document.getElementById('vocab-exam-next-btn').addEventListener('click', submitMockExamAnswer);
+document.getElementById('vocab-exam-play-btn').addEventListener('click', (e) => {
+  const btn = e.currentTarget;
+  if(btn.dataset.audioText) speakVocabWord(btn.dataset.audioText, btn.dataset.audioLang);
+});
 document.getElementById('vocab-mock-drill-wrong-btn').addEventListener('click', () => {
   const ids = mockExamSession.wrongWords.map(w => w.id);
   document.getElementById('vocab-mock-results-area').classList.add('hidden');
