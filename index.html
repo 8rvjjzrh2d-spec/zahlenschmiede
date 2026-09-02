@@ -599,6 +599,8 @@
     <div class="hidden" id="vocab-tab-week">
       <div class="journal-quest" id="vocab-week-summary" style="text-align:center;"></div>
       <button class="primary-btn" id="vocab-week-start-btn" style="max-width:340px; margin:12px auto 0; display:block;">▶️ JETZT ÜBEN</button>
+      <button class="ghost-btn" id="vocab-power-start-btn" style="max-width:340px; margin:8px auto 0; display:block; border:2px solid var(--ink); border-radius:8px;">⚡ POWER-TRAINING</button>
+      <div class="account-sub" style="text-align:center; margin-top:6px;">Nur Deutsch → Englisch tippen, ohne Multiple Choice/Hören - schnell, genau wie in der Prüfung</div>
     </div>
 
     <div class="hidden" id="vocab-tab-mine">
@@ -617,7 +619,7 @@
     <div class="hidden" id="vocab-tab-exam">
       <div class="journal-quest" style="text-align:center;">
         📝 <strong>Probeprüfung</strong><br>
-        <span class="journal-sub">Nur die Wörter dieser Woche, zufällige Reihenfolge, keine Hinweise und keine Korrektur während der Prüfung - genau wie beim echten Test.</span>
+        <span class="journal-sub">Nur die Wörter dieser Woche, nur Deutsch → Englisch, zufällige Reihenfolge, keine Hinweise und keine Korrektur während der Prüfung - genau wie beim echten Test.</span>
       </div>
       <button class="primary-btn" id="vocab-exam-start-btn" style="max-width:340px; margin:12px auto 0; display:block;">▶️ PROBEPRÜFUNG STARTEN</button>
     </div>
@@ -10700,7 +10702,11 @@ function nextVocabQuestion(){
   renderVocabRoundProgress();
   const word = pickVocabWord(vocabSession.lastWordId);
   vocabSession.lastWordId = word.id;
-  const exerciseType = pickExerciseType(word, vocabSession.mode);
+  // Power-Training: bewusst IMMER Deutsch->Englisch tippen, kein Multiple
+  // Choice/Hören - genau das Format der echten Prüfung, ohne Zeit für
+  // Abwechslung zu "verlieren" (siehe Bugreport "braucht manchmal etwas
+  // zeitsparendes Powertraining").
+  const exerciseType = vocabSession.mode === 'power' ? 'de2en' : pickExerciseType(word, vocabSession.mode);
   let direction;
   if(exerciseType === 'mc_en2de') direction = 'en2de';
   else if(exerciseType === 'mc_de2en') direction = 'de2en';
@@ -10900,12 +10906,13 @@ function startVocabPractice(mode, ids){
   hideAllVocabPanels();
   document.getElementById('vocab-quiz-area').classList.remove('hidden');
   vocabSession = { mode, idPool: ids||null, score:0, streak:0, current:null, lastWordId:null, roundAnswered:0, roundCorrect:0 };
-  const labelMap = { today:'📅 Heute', week:`🎯 Diese Woche - Woche ${CURRENT_VOCAB_WEEK}`, mine:'📚 Alte Wörter', ids:'🔁 Wörter aus der Probeprüfung' };
+  const labelMap = { today:'📅 Heute', week:`🎯 Diese Woche - Woche ${CURRENT_VOCAB_WEEK}`, mine:'📚 Alte Wörter', ids:'🔁 Wörter aus der Probeprüfung', power:`⚡ Power-Training - Woche ${CURRENT_VOCAB_WEEK}` };
   document.getElementById('vocab-mode-indicator').textContent = labelMap[mode] || '🔤 Üben';
   nextVocabQuestion();
 }
 document.getElementById('vocab-today-start-btn').addEventListener('click', () => startVocabPractice('today'));
 document.getElementById('vocab-week-start-btn').addEventListener('click', () => startVocabPractice('week'));
+document.getElementById('vocab-power-start-btn').addEventListener('click', () => startVocabPractice('power'));
 document.getElementById('vocab-mine-start-btn').addEventListener('click', () => startVocabPractice('mine'));
 document.getElementById('vocab-quiz-back-btn').addEventListener('click', () => showVocabTab(currentVocabTab));
 
@@ -10916,8 +10923,11 @@ document.getElementById('vocab-quiz-back-btn').addEventListener('click', () => s
 // =====================================================================
 function startMockExam(){
   const pool = VOCAB_WORDS.filter(w => w.week === CURRENT_VOCAB_WEEK);
+  // Nur Deutsch -> Englisch: bei der echten Prüfung wird laut Nutzer nur in
+  // diese Richtung übersetzt, die Probeprüfung soll das exakt spiegeln statt
+  // (wie vorher) beide Richtungen zu mischen.
   const questions = pool.slice().sort(() => Math.random()-0.5).map(w => ({
-    word: w, direction: Math.random() < 0.5 ? 'en2de' : 'de2en'
+    word: w, direction: 'de2en'
   }));
   mockExamSession = { questions, index:0, wrongWords:[] };
   hideAllVocabPanels();
