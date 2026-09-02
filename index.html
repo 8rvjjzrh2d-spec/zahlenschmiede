@@ -10693,12 +10693,65 @@ function pickExerciseType(word, mode){
 // dort: die echte Prüfung liest die Lehrerin die Wörter NUR auf Deutsch
 // vor, das Kind schreibt nur die englische Übersetzung - kein gedrucktes
 // deutsches Wort).
-function speakVocabWord(text, lang){
+// Bugreport "Stimme klingt schlecht": ohne explizite Stimmwahl nimmt der
+// Browser irgendeine installierte Stimme für die Sprache - oft die
+// einfache "Compact"-Notfall-Stimme statt einer der besseren "Enhanced"/
+// "Premium"-Stimmen, die auf dem Gerät bereits installiert sein können.
+// pickBestVoice() wählt daher aktiv die beste verfügbare Stimme für die
+// Sprache statt das dem Browser-Default zu überlassen. WICHTIGSTER Hebel
+// liegt aber ausserhalb des Codes: iPad-Einstellungen -> Bedienungshilfen
+// -> Gesprochener Inhalt -> Stimmen -> Deutsch/Englisch - dort eine
+// "Erweitert"/"Premium"-Stimme herunterladen, falls noch nicht geschehen;
+// ohne eine solche installierte Stimme hat auch die beste Auswahl-Logik
+// hier nichts Besseres zur Auswahl.
+let __cachedVoices = null;
+function loadVoicesOnce(){
+  if(__cachedVoices && __cachedVoices.length) return Promise.resolve(__cachedVoices);
+  return new Promise((resolve) => {
+    const existing = window.speechSynthesis.getVoices();
+    if(existing && existing.length){ __cachedVoices = existing; resolve(existing); return; }
+    // Viele Browser laden die Stimmliste asynchron nach (leer beim allerersten
+    // Aufruf) - auf das voiceschanged-Event warten, mit Zeitlimit als
+    // Sicherheitsnetz für Browser, die das Event nie zuverlässig feuern.
+    window.speechSynthesis.addEventListener('voiceschanged', () => {
+      __cachedVoices = window.speechSynthesis.getVoices();
+      resolve(__cachedVoices);
+    }, { once:true });
+    setTimeout(() => resolve(window.speechSynthesis.getVoices()), 500);
+  });
+}
+// Apple-Geräte bieten pro Sprache neben der normalen Stimme auch diverse
+// Spass-/Charakter-Stimmen an (z.B. "Grandma", "Monster", "Flüstern",
+// "Zarvox") - für eine klare, neutrale Vorlese-Stimme zum Vokabellernen
+// ungeeignet. Bekannte, verlässlich neutral klingende Standardstimmen werden
+// deshalb NAMENTLICH bevorzugt, statt sich auf die (browser-/geräteabhängige,
+// nicht garantierte) Reihenfolge von getVoices() zu verlassen.
+const PREFERRED_VOICE_NAMES = { 'de-de': ['Anna'], 'en-gb': ['Daniel','Kate','Serena'], 'en-us': ['Samantha'] };
+function pickBestVoice(voices, lang){
+  const prefix = lang.split('-')[0].toLowerCase();
+  const candidates = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(prefix));
+  if(!candidates.length) return null;
+  const preferredNames = PREFERRED_VOICE_NAMES[lang.toLowerCase()] || [];
+  for(const name of preferredNames){
+    const match = candidates.find(v => v.name === name);
+    if(match) return match;
+  }
+  const qualityMarkers = ['premium','enhanced','neural','plus','pro'];
+  const premium = candidates.find(v => qualityMarkers.some(m => v.name.toLowerCase().includes(m)));
+  if(premium) return premium;
+  const exact = candidates.find(v => v.lang.toLowerCase() === lang.toLowerCase());
+  return exact || candidates[0];
+}
+async function speakVocabWord(text, lang){
   try {
     if(!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
+    const targetLang = lang || 'en-GB';
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang || 'en-GB'; u.rate = 0.85;
+    u.lang = targetLang; u.rate = 0.85;
+    const voices = await loadVoicesOnce();
+    const best = pickBestVoice(voices, targetLang);
+    if(best) u.voice = best;
     window.speechSynthesis.speak(u);
   } catch(e){ /* Sprachausgabe ist ein Extra, kein Blocker für die Übung */ }
 }
